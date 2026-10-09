@@ -1,0 +1,110 @@
+{
+  "$schema": "https://raw.githubusercontent.com/my-harness/my-harness/main/harness.schema.json",
+  "project_name": "desktop-app",
+  "preset": "desktop-vue-rust",
+  "git": {
+    "protected_branches": ["main", "master"],
+    "enforce_branch_safety": true
+  },
+  "guardrails": {
+    "reminders": [
+      "1. Contract-First: Define Rust IPC structs & TypeScript interfaces before writing business logic.",
+      "2. TDD: Write failing tests before production code (Node native runner for frontend, cargo test for Rust).",
+      "3. Micro-Validation: Run `python .agents/scripts/verify_shift_left.py --changed` after every file edit.",
+      "4. PrimeVue Foundation: No raw HTML <button>/<input>/<select>; use PrimeVue with v-tooltip.",
+      "5. Boundary: No native desktop runtime imports in components/composables (route via @/services/*)."
+    ]
+  },
+  "rules": {
+    "banned_imports": [
+      {
+        "id": "no-desktop-runtime-in-ui",
+        "description": "Direct native desktop runtime import in UI/composables",
+        "pattern": "['\"](@neutralinojs/lib|@tauri-apps/api)['\"]",
+        "path_match": ["src/components/", "src/views/", "src/composables/"],
+        "suggestion": "Route OS/runtime interactions through centralized services in `@/services/*` instead."
+      }
+    ],
+    "banned_patterns": [
+      {
+        "id": "rust-safety-unwrap",
+        "description": "Rust `.unwrap()` call in production engine code",
+        "pattern": "\\.unwrap\\(\\)",
+        "file_extensions": [".rs"],
+        "path_exclude": ["/tests/", "tests/", "build.rs"],
+        "ignore_in_test_modules": true,
+        "suggestion": "Handle errors explicitly with `?` or `match` / `if let` returning Result<T, E>."
+      },
+      {
+        "id": "rust-safety-expect",
+        "description": "Rust `.expect(...)` call in production engine code",
+        "pattern": "\\.expect\\(",
+        "file_extensions": [".rs"],
+        "path_exclude": ["/tests/", "tests/", "build.rs"],
+        "ignore_in_test_modules": true,
+        "suggestion": "Handle recoverable errors explicitly or log diagnostic failure via Result<T, E>."
+      },
+      {
+        "id": "rust-safety-panic",
+        "description": "Rust `panic!(...)` macro in production engine code",
+        "pattern": "\\bpanic!\\(",
+        "file_extensions": [".rs"],
+        "path_exclude": ["/tests/", "tests/", "build.rs"],
+        "ignore_in_test_modules": true,
+        "suggestion": "Return structured errors across IPC boundary instead of crashing backend engine."
+      },
+      {
+        "id": "no-hardcoded-hex-colors",
+        "description": "Hardcoded hex color in stylesheet",
+        "pattern": "#[0-9a-fA-F]{3,8}\\b",
+        "file_extensions": [".css", ".scss", ".vue"],
+        "path_exclude": ["src/assets/base.css", "src/assets/tokens.css", "node_modules"],
+        "css_blocks_only": true,
+        "suggestion": "Use design tokens (var(--accent), var(--border), var(--bg-card), etc.) from base.css."
+      }
+    ],
+    "vue_template_rules": {
+      "banned_tags": [
+        {
+          "tag": "button",
+          "suggestion": "Use PrimeVue `<Button>` component instead."
+        },
+        {
+          "tag": "input",
+          "suggestion": "Use PrimeVue `<InputText>`, `<InputNumber>`, or `<Checkbox>` instead."
+        },
+        {
+          "tag": "select",
+          "suggestion": "Use PrimeVue `<Select>` component instead."
+        }
+      ],
+      "banned_attributes": [
+        {
+          "attribute": "title",
+          "ignore_components": [
+            "KeyValueEditor",
+            "KeyValueBadgeList",
+            "BaseDetailsDrawer",
+            "Card",
+            "Panel",
+            "Dialog",
+            "Drawer",
+            "TabPanel",
+            "ViewLayout",
+            "EmptyState",
+            "SectionHeader",
+            "DetailsCard"
+          ],
+          "suggestion": "Use PrimeVue `v-tooltip=\"'...'\"` directive instead of native title attribute."
+        }
+      ]
+    }
+  },
+  "commands": {
+    "type_check": "npm run type-check",
+    "lint": "npm run lint",
+    "test": "npm test",
+    "build": "npm run build",
+    "cargo_test": "cargo test"
+  }
+}

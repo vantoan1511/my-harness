@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-harness"
+version = "0.1.0"
+description = "A refined, reusable agent engineering harness for shift-left software development, specification, planning, and TDD."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "my-harness contributors" }
+]
+keywords = ["agents", "shift-left", "tdd", "prp", "harness", "code-review", "automation"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.scripts]
+harness = "harness:main"
+
+[tool.setuptools]
+py-modules = ["harness"]
