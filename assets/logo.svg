@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="40" y1="30" x2="216" y2="226" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00C9FF" />
+      <stop offset="50%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="128" y1="32" x2="128" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0.1" />
+    </linearGradient>
+    <filter id="shadow" x="20" y="20" width="216" height="220" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- 10% Safe Margin Boundary (26px to 230px) -->
+  <!-- Outer Shield / Container -->
+  <path d="M128 34 L212 68 C212 144 176 198 128 222 C80 198 44 144 44 68 Z"
+        fill="url(#glowGrad)"
+        stroke="url(#shieldGrad)"
+        stroke-width="7"
+        stroke-linejoin="round"
+        filter="url(#shadow)" />
+
+  <!-- Inner Shift-Left Steer & Circuit Nodes -->
+  <path d="M128 54 L194 80 C194 140 165 182 128 202 C91 182 62 140 62 80 Z"
+        stroke="#38BDF8"
+        stroke-opacity="0.4"
+        stroke-width="2"
+        stroke-dasharray="5 4" />
+
+  <!-- Autonomous Gear / Harness Axis -->
+  <circle cx="128" cy="128" r="46"
+          stroke="#00C9FF"
+          stroke-width="5"
+          stroke-linecap="round"
+          stroke-dasharray="16 10" />
+
+  <!-- Center Core Ring -->
+  <circle cx="128" cy="128" r="28"
+          fill="#1E1B4B"
+          stroke="#A78BFA"
+          stroke-width="4" />
+
+  <!-- Code / DevKit Brackets </> Symbol -->
+  <!-- Left Bracket < -->
+  <path d="M116 116 L104 128 L116 140"
+        stroke="#FFFFFF"
+        stroke-width="4.5"
+        stroke-linecap="round"
+        stroke-linejoin="round" />
+
+  <!-- Right Bracket > -->
+  <path d="M140 116 L152 128 L140 140"
+        stroke="#FFFFFF"
+        stroke-width="4.5"
+        stroke-linecap="round"
+        stroke-linejoin="round" />
+
+  <!-- Center Slash / -->
+  <path d="M132 113 L124 143"
+        stroke="#38BDF8"
+        stroke-width="4"
+        stroke-linecap="round" />
+
+  <!-- Top Anchor Shift-Left Pulse Dot -->
+  <circle cx="128" cy="48" r="5" fill="#38BDF8" />
+  <circle cx="128" cy="48" r="9" stroke="#38BDF8" stroke-width="1.5" stroke-opacity="0.6" />
+</svg>

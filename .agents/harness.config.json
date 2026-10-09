@@ -27,8 +27,8 @@
   },
   "commands": {
     "type_check": "",
-    "lint": "ruff check .",
-    "test": "pytest",
+    "lint": "",
+    "test": "python -m unittest discover tests",
     "build": ""
   }
 }

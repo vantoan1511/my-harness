@@ -73,5 +73,51 @@ class TestHarnessInitScope(unittest.TestCase):
             ]
             self.assertTrue(len(pip_calls) > 0, "pip install -e should be invoked in global scope")
 
+    def test_cmd_init_global_antigravity_plugin(self):
+        mock_home = Path(self.temp_dir) / "mock_home_plugin"
+        mock_home.mkdir()
+        gemini_plugins = mock_home / ".gemini" / "config" / "plugins"
+        gemini_plugins.mkdir(parents=True)
+
+        args = MagicMock()
+        args.target = "."
+        args.scope = "global"
+        args.preset = "universal"
+        args.pack = None
+
+        with patch("pathlib.Path.home", return_value=mock_home), \
+             patch("subprocess.run") as mock_subproc:
+            mock_subproc.return_value = MagicMock(returncode=0)
+            harness.cmd_init(args)
+
+            plugin_dir = gemini_plugins / "my-harness"
+            self.assertTrue(plugin_dir.exists())
+
+            # 1. Manifest assertions
+            manifest_file = plugin_dir / "plugin.json"
+            self.assertTrue(manifest_file.exists())
+            import json
+            manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["name"], "my-harness")
+            self.assertEqual(manifest["displayName"], "Agent Engineering DevKit")
+            self.assertIn("logo", manifest)
+            self.assertEqual(manifest["logo"], "assets/logo.svg")
+            self.assertIn("suggestedPrompts", manifest)
+            self.assertEqual(len(manifest["suggestedPrompts"]), 3)
+            self.assertNotIn("author", manifest, "Plugin standard: author field is discarded and prohibited")
+
+            # 2. Assets & Documentation
+            self.assertTrue((plugin_dir / "assets" / "logo.svg").exists())
+            self.assertTrue((plugin_dir / "README.md").exists())
+
+            # 3. Canonical rules/AGENTS.md
+            rules_agents = plugin_dir / "rules" / "AGENTS.md"
+            self.assertTrue(rules_agents.exists())
+            loose_rules = [f.name for f in (plugin_dir / "rules").glob("*.md") if f.name != "AGENTS.md"]
+            self.assertEqual(loose_rules, [])
+
+            # 4. Decoupled hooks.json
+            self.assertFalse((plugin_dir / "hooks.json").exists())
+
 if __name__ == "__main__":
     unittest.main()

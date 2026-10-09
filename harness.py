@@ -207,17 +207,46 @@ def cmd_init(args):
                 "displayName": "Agent Engineering DevKit",
                 "version": VERSION,
                 "description": "Shift-left SDLC workflows: spec-first design, TDD loops, code review, and automated PR delivery.",
-                "author": {
-                    "name": "my-harness"
-                }
+                "logo": "assets/logo.svg",
+                "suggestedPrompts": [
+                    "/specify design contract and implementation plan for a new feature",
+                    "/tdd-workflow implement failing tests first then pass them",
+                    "/code-review inspect uncommitted changes against quality constitution"
+                ]
             }
             (harness_plugin_dir / "plugin.json").write_text(json.dumps(plugin_manifest, indent=2), encoding="utf-8")
 
-            # Copy skills and rules to plugin directory
+            # Copy assets/logo.svg
+            assets_dir = harness_plugin_dir / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            logo_src = harness_root / "assets" / "logo.svg"
+            if not logo_src.exists():
+                logo_src = harness_root / "template" / "assets" / "logo.svg"
+            if logo_src.exists():
+                shutil.copy2(logo_src, assets_dir / "logo.svg")
+
+            # Copy plugin README.md
+            plugin_readme_src = harness_root / "template" / "PLUGIN_README.md"
+            if plugin_readme_src.exists():
+                shutil.copy2(plugin_readme_src, harness_plugin_dir / "README.md")
+            elif (harness_root / "README.md").exists():
+                shutil.copy2(harness_root / "README.md", harness_plugin_dir / "README.md")
+
+            # Copy skills to plugin directory
             copy_tree_merge(template_agents / "skills", harness_plugin_dir / "skills")
-            copy_tree_merge(template_agents / "rules", harness_plugin_dir / "rules")
-            if (template_agents / "hooks.json").exists():
-                shutil.copy2(template_agents / "hooks.json", harness_plugin_dir / "hooks.json")
+
+            # Consolidate rules into canonical rules/AGENTS.md
+            rules_target_dir = harness_plugin_dir / "rules"
+            rules_target_dir.mkdir(parents=True, exist_ok=True)
+            for old_rule in rules_target_dir.glob("*.md"):
+                if old_rule.name != "AGENTS.md":
+                    old_rule.unlink()
+
+            rule_parts = []
+            for r_name in ["shift-left-quality.md", "review-rules.md", "natural-human-writing.md"]:
+                r_path = template_agents / "rules" / r_name
+                if r_path.exists():
+                    rule_parts.append(r_path.read_text(encoding="utf-8").strip())
 
             # Copy pack skills & rules if pack was installed
             if args.pack:
@@ -225,7 +254,14 @@ def cmd_init(args):
                 if (pack_dir / "skills").exists():
                     copy_tree_merge(pack_dir / "skills", harness_plugin_dir / "skills")
                 if (pack_dir / "rules").exists():
-                    copy_tree_merge(pack_dir / "rules", harness_plugin_dir / "rules")
+                    for pr_path in (pack_dir / "rules").glob("*.md"):
+                        rule_parts.append(pr_path.read_text(encoding="utf-8").strip())
+
+            (rules_target_dir / "AGENTS.md").write_text("\n\n---\n\n".join(rule_parts), encoding="utf-8")
+
+            # Do not deploy workspace-dependent hooks into global plugin bundle
+            if (harness_plugin_dir / "hooks.json").exists():
+                (harness_plugin_dir / "hooks.json").unlink()
 
             print(f"{COLOR_GREEN}[PASS] Installed Antigravity global plugin with all skills and rules ({harness_plugin_dir}){COLOR_RESET}")
 
