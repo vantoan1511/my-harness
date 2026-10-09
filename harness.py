@@ -196,6 +196,32 @@ def cmd_init(args):
             print(f"{COLOR_YELLOW}Warning: Failed to pip install harness globally: {e}{COLOR_RESET}")
             print(f"{COLOR_YELLOW}Tip: You can manually run: pip install -e {harness_root}{COLOR_RESET}")
 
+        # 6. Antigravity integration: register global skills in ~/.gemini/config/skills.json
+        gemini_config_dir = Path.home() / ".gemini" / "config"
+        if gemini_config_dir.exists():
+            skills_json_file = gemini_config_dir / "skills.json"
+            skills_cfg = {"entries": []}
+            if skills_json_file.exists():
+                try:
+                    skills_cfg = json.loads(skills_json_file.read_text(encoding="utf-8"))
+                except Exception:
+                    skills_cfg = {"entries": []}
+
+            entries = skills_cfg.get("entries", [])
+            if not isinstance(entries, list):
+                entries = []
+
+            existing_paths = [e.get("path") for e in entries if isinstance(e, dict)]
+            global_skills_path = "~/.agents/skills"
+            if global_skills_path not in existing_paths and str(target_agents / "skills") not in existing_paths:
+                entries.append({"path": global_skills_path})
+                skills_cfg["entries"] = entries
+                try:
+                    skills_json_file.write_text(json.dumps(skills_cfg, indent=2), encoding="utf-8")
+                    print(f"{COLOR_GREEN}[PASS] Registered global skills in Antigravity ({skills_json_file}){COLOR_RESET}")
+                except Exception as e:
+                    print(f"{COLOR_YELLOW}Warning: Could not update Antigravity skills.json: {e}{COLOR_RESET}")
+
     print(f"\n{COLOR_BOLD}{COLOR_GREEN}✓ my-harness initialization ({'global' if is_global else 'project'}) complete!{COLOR_RESET}")
     if is_global:
         print(f"Global .agents configuration installed in: {target_agents}")

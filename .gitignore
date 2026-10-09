@@ -28,6 +28,7 @@ wheels/
 .pytest_cache/
 htmlcov/
 tests/install_sandbox/
+tests/simulated_external_project/
 
 # Logs & Runtime
 *.log
