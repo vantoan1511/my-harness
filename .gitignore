@@ -27,6 +27,7 @@ wheels/
 .coverage
 .pytest_cache/
 htmlcov/
+tests/install_sandbox/
 
 # Logs & Runtime
 *.log
