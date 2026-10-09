@@ -204,9 +204,9 @@ def cmd_init(args):
 
             plugin_manifest = {
                 "name": "my-harness",
-                "displayName": "my-harness Engineering Harness",
+                "displayName": "Agent Engineering DevKit",
                 "version": VERSION,
-                "description": "Autonomous AI Agent SDLC engineering harness with shift-left quality, TDD, and planning workflows",
+                "description": "Shift-left SDLC workflows: spec-first design, TDD loops, code review, and automated PR delivery.",
                 "author": {
                     "name": "my-harness"
                 }
