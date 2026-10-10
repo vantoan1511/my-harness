@@ -13,8 +13,187 @@ import json
 import argparse
 import subprocess
 from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Set, Optional
 
 VERSION = "0.1.0"
+
+@dataclass
+class GlobalInstallationInfo:
+    is_installed: bool
+    plugin_dir: Optional[Path] = None
+    global_agents_dir: Optional[Path] = None
+    global_skills: Set[str] = field(default_factory=set)
+    global_rules: Set[str] = field(default_factory=set)
+
+def detect_global_installation() -> GlobalInstallationInfo:
+    home = Path.home()
+    plugin_dir = home / ".gemini" / "config" / "plugins" / "my-harness"
+    global_agents = home / ".agents"
+
+    has_plugin = plugin_dir.exists()
+    has_global_agents = global_agents.exists()
+
+    is_installed = has_plugin or has_global_agents
+    skills: Set[str] = set()
+    rules: Set[str] = set()
+
+    # Collect from plugin
+    if has_plugin:
+        plugin_skills_dir = plugin_dir / "skills"
+        if plugin_skills_dir.exists():
+            for s in plugin_skills_dir.iterdir():
+                if s.is_dir() and (s / "SKILL.md").exists():
+                    skills.add(s.name)
+        plugin_rules_dir = plugin_dir / "rules"
+        if plugin_rules_dir.exists():
+            for r in plugin_rules_dir.glob("*.md"):
+                rules.add(r.name)
+            if (plugin_rules_dir / "AGENTS.md").exists():
+                rules.update({"shift-left-quality.md", "review-rules.md", "natural-human-writing.md"})
+
+    # Collect from global .agents
+    if has_global_agents:
+        g_skills_dir = global_agents / "skills"
+        if g_skills_dir.exists():
+            for s in g_skills_dir.iterdir():
+                if s.is_dir() and (s / "SKILL.md").exists():
+                    skills.add(s.name)
+        g_rules_dir = global_agents / "rules"
+        if g_rules_dir.exists():
+            for r in g_rules_dir.glob("*.md"):
+                rules.add(r.name)
+
+    return GlobalInstallationInfo(
+        is_installed=is_installed,
+        plugin_dir=plugin_dir if has_plugin else None,
+        global_agents_dir=global_agents if has_global_agents else None,
+        global_skills=skills,
+        global_rules=rules
+    )
+
+def deduplicate_project_scope(target_agents: Path, global_info: GlobalInstallationInfo, dry_run: bool = False) -> dict:
+    summary = {
+        "removed_skills": [],
+        "preserved_skills": [],
+        "removed_rules": [],
+        "preserved_rules": []
+    }
+
+    if not global_info.is_installed:
+        return summary
+
+    skills_dir = target_agents / "skills"
+    if skills_dir.exists():
+        for s in list(skills_dir.iterdir()):
+            if s.is_dir():
+                if s.name in global_info.global_skills:
+                    summary["removed_skills"].append(s.name)
+                    if not dry_run:
+                        shutil.rmtree(s)
+                else:
+                    summary["preserved_skills"].append(s.name)
+
+    rules_dir = target_agents / "rules"
+    if rules_dir.exists():
+        for r in list(rules_dir.glob("*.md")):
+            if r.name in global_info.global_rules:
+                summary["removed_rules"].append(r.name)
+                if not dry_run:
+                    r.unlink()
+            else:
+                summary["preserved_rules"].append(r.name)
+
+    if not dry_run:
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        rules_dir.mkdir(parents=True, exist_ok=True)
+
+    return summary
+
+def repair_project_structure(target_agents: Path, dry_run: bool = False) -> dict:
+    expected_dirs = [
+        "rules", "scripts", "skills", "references", "PRPs",
+        "PRPs/plans", "PRPs/plans/completed", "PRPs/prds", "PRPs/reports",
+        "reviews", "handoffs", "logs"
+    ]
+    summary = {"created_dirs": [], "existing_dirs": []}
+    for d in expected_dirs:
+        dir_path = target_agents / d
+        if not dir_path.exists():
+            summary["created_dirs"].append(d)
+            if not dry_run:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                if d in ["PRPs/plans/completed", "PRPs/prds", "PRPs/reports", "reviews", "handoffs", "logs"]:
+                    (dir_path / ".gitkeep").touch(exist_ok=True)
+        else:
+            summary["existing_dirs"].append(d)
+    return summary
+
+def repair_project_scripts(target_agents: Path, template_agents: Path, dry_run: bool = False) -> dict:
+    core_scripts = ["verify_shift_left.py", "shift_left_hook.py", "memory_logger.py", "curate_knowledge.py"]
+    summary = {"restored_scripts": [], "existing_scripts": []}
+    scripts_dir = target_agents / "scripts"
+    if not dry_run:
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+
+    template_scripts_dir = template_agents / "scripts"
+    for s in core_scripts:
+        target_script = scripts_dir / s
+        if not target_script.exists():
+            summary["restored_scripts"].append(s)
+            if not dry_run and (template_scripts_dir / s).exists():
+                shutil.copy2(template_scripts_dir / s, target_script)
+        else:
+            summary["existing_scripts"].append(s)
+    return summary
+
+def repair_project_configs(target_dir: Path, target_agents: Path, template_agents: Path, dry_run: bool = False) -> dict:
+    summary = {"repaired_configs": []}
+    config_file = target_agents / "harness.config.json"
+    hooks_file = target_agents / "hooks.json"
+
+    need_config_repair = False
+    config = {}
+    if not config_file.exists():
+        need_config_repair = True
+    else:
+        try:
+            config = json.loads(config_file.read_text(encoding="utf-8"))
+        except Exception:
+            need_config_repair = True
+            config = {}
+
+    if need_config_repair or "project_name" not in config or "commands" not in config:
+        summary["repaired_configs"].append("harness.config.json")
+        if not dry_run:
+            stack = detect_project_stack(target_dir)
+            project_name = target_dir.name or "project"
+            config.setdefault("project_name", project_name)
+            config.setdefault("preset", "universal")
+            if "commands" not in config:
+                config["commands"] = {}
+            for k, v in stack["commands"].items():
+                if not config["commands"].get(k) and v:
+                    config["commands"][k] = v
+            config_file.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
+    need_hooks_repair = False
+    if not hooks_file.exists():
+        need_hooks_repair = True
+    else:
+        try:
+            json.loads(hooks_file.read_text(encoding="utf-8"))
+        except Exception:
+            need_hooks_repair = True
+
+    if need_hooks_repair:
+        summary["repaired_configs"].append("hooks.json")
+        if not dry_run:
+            template_hooks = template_agents / "hooks.json"
+            if template_hooks.exists():
+                shutil.copy2(template_hooks, hooks_file)
+
+    return summary
 
 # ANSI colors
 COLOR_RESET = "\033[0m"
@@ -143,6 +322,11 @@ def cmd_init(args):
 
     # 1. Copy template .agents/ into target
     copy_tree_merge(template_agents, target_agents)
+    if not is_global:
+        global_info = detect_global_installation()
+        if global_info.is_installed:
+            deduplicate_project_scope(target_agents, global_info, dry_run=False)
+            print(f"{COLOR_CYAN}[INFO] Global installation detected: deduplicated project skills and rules to prevent conflicts{COLOR_RESET}")
     print(f"{COLOR_GREEN}[PASS] Scaffolding .agents/ directories and core skills{COLOR_RESET}")
 
     # 2. Detect stack and customize harness.config.json
@@ -279,6 +463,7 @@ def cmd_init(args):
         print(f"  - /commit                 (Conventional commit with smart staging)")
         print(f"  - /pr                     (Automated GitHub PR creation)")
         print(f"  - /pr-changelog           (Generate concise PR changelog)")
+        print(f"  - harness fix             (Repair structure & deduplicate global conflicts)")
         print(f"  - python .agents/scripts/verify_shift_left.py --changed (Fast pre-flight check)")
 
 def install_pack(pack_name: str, target_dir: Path):
@@ -428,6 +613,33 @@ def cmd_doctor(args):
     except Exception:
         print(f"{COLOR_YELLOW}[WARN]{COLOR_RESET} Git repository not initialized or git not in PATH")
 
+    # 5. Global duplicate check
+    global_info = detect_global_installation()
+    if global_info.is_installed:
+        dup_skills = []
+        skills_dir = target_agents / "skills"
+        if skills_dir.exists():
+            for s in skills_dir.iterdir():
+                if s.is_dir() and s.name in global_info.global_skills:
+                    dup_skills.append(s.name)
+
+        dup_rules = []
+        rules_dir = target_agents / "rules"
+        if rules_dir.exists():
+            for r in rules_dir.glob("*.md"):
+                if r.name in global_info.global_rules:
+                    dup_rules.append(r.name)
+
+        if dup_skills or dup_rules:
+            msg_parts = []
+            if dup_skills:
+                msg_parts.append(f"{len(dup_skills)} duplicate skill(s) ({', '.join(dup_skills)})")
+            if dup_rules:
+                msg_parts.append(f"{len(dup_rules)} duplicate rule(s) ({', '.join(dup_rules)})")
+            print(f"{COLOR_YELLOW}[WARN]{COLOR_RESET} Global installation detected with {' and '.join(msg_parts)} in project scope. Run 'harness fix' to resolve conflicts.")
+        else:
+            print(f"{COLOR_GREEN}[PASS]{COLOR_RESET} No duplicate skills/rules with global installation")
+
     print(f"\n{COLOR_BOLD}Doctor check completed.{COLOR_RESET}")
 
 def cmd_verify(args):
@@ -470,7 +682,60 @@ def cmd_sync(args):
     # Sync skills
     copy_tree_merge(template_agents / "skills", target_agents / "skills")
 
-    print(f"{COLOR_GREEN}[PASS] Core scripts, rules, and universal skills updated!{COLOR_RESET}")
+def cmd_fix(args) -> int:
+    target_dir = Path(args.target).resolve()
+    target_agents = target_dir / ".agents"
+    harness_root = get_harness_root()
+    template_agents = harness_root / "template" / ".agents"
+    dry_run = getattr(args, "dry_run", False)
+
+    print(f"{COLOR_CYAN}==> Running my-harness Fix on: {target_dir} {'(DRY RUN)' if dry_run else ''}{COLOR_RESET}\n")
+
+    if not target_agents.exists():
+        if not dry_run:
+            target_agents.mkdir(parents=True, exist_ok=True)
+            print(f"{COLOR_YELLOW}[CREATE] Created missing .agents/ directory{COLOR_RESET}")
+        else:
+            print(f"{COLOR_YELLOW}[DRY RUN] Would create missing .agents/ directory{COLOR_RESET}")
+
+    # 1. Structure repairs
+    struct_res = repair_project_structure(target_agents, dry_run=dry_run)
+    for cd in struct_res["created_dirs"]:
+        prefix = "[DRY RUN] Would create" if dry_run else "[REPAIRED] Created"
+        print(f"{COLOR_GREEN}{prefix} missing directory: .agents/{cd}{COLOR_RESET}")
+
+    # 2. Core scripts repairs
+    scripts_res = repair_project_scripts(target_agents, template_agents, dry_run=dry_run)
+    for rs in scripts_res["restored_scripts"]:
+        prefix = "[DRY RUN] Would restore" if dry_run else "[REPAIRED] Restored"
+        print(f"{COLOR_GREEN}{prefix} missing script: .agents/scripts/{rs}{COLOR_RESET}")
+
+    # 3. Config repairs
+    cfg_res = repair_project_configs(target_dir, target_agents, template_agents, dry_run=dry_run)
+    for rc in cfg_res["repaired_configs"]:
+        prefix = "[DRY RUN] Would repair" if dry_run else "[REPAIRED] Repaired"
+        print(f"{COLOR_GREEN}{prefix} configuration: .agents/{rc}{COLOR_RESET}")
+
+    # 4. Global deduplication
+    global_info = detect_global_installation()
+    if global_info.is_installed:
+        dedup_res = deduplicate_project_scope(target_agents, global_info, dry_run=dry_run)
+        for sk in dedup_res["removed_skills"]:
+            prefix = "[DRY RUN] Would remove duplicate skill" if dry_run else "[REMOVED] Duplicate skill"
+            print(f"{COLOR_YELLOW}{prefix}: .agents/skills/{sk} (provided globally){COLOR_RESET}")
+        for rk in dedup_res["removed_rules"]:
+            prefix = "[DRY RUN] Would remove duplicate rule" if dry_run else "[REMOVED] Duplicate rule"
+            print(f"{COLOR_YELLOW}{prefix}: .agents/rules/{rk} (provided globally){COLOR_RESET}")
+
+        if dedup_res["preserved_skills"]:
+            print(f"{COLOR_CYAN}[INFO] Preserved custom project skill(s): {', '.join(dedup_res['preserved_skills'])}{COLOR_RESET}")
+        if dedup_res["preserved_rules"]:
+            print(f"{COLOR_CYAN}[INFO] Preserved custom project rule(s): {', '.join(dedup_res['preserved_rules'])}{COLOR_RESET}")
+    else:
+        print(f"{COLOR_CYAN}[INFO] No global installation detected; skipping deduplication.{COLOR_RESET}")
+
+    print(f"\n{COLOR_BOLD}{COLOR_GREEN}✓ Project repair & deduplication complete!{COLOR_RESET}")
+    return 0
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="my-harness — Reusable Agent Engineering Harness")
@@ -482,6 +747,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--scope", choices=["project", "global"], default="project", help="Installation scope: project (target directory) or global (user home ~/.agents and CLI)")
     p_init.add_argument("--preset", default="universal", help="Configuration preset name")
     p_init.add_argument("--pack", help="Optional pack to install during init (e.g. orbit-desktop, vue-primevue)")
+
+    # fix
+    p_fix = subparsers.add_parser("fix", help="Repair project-scope .agents setup and remove duplicates if globally installed")
+    p_fix.add_argument("target", nargs="?", default=".", help="Target project directory (default: current directory)")
+    p_fix.add_argument("--dry-run", action="store_true", help="Preview repairs and deduplications without making changes")
 
     # add-pack
     p_pack = subparsers.add_parser("add-pack", help="Install an extension pack into target project")
@@ -520,6 +790,8 @@ def main():
 
     if args.subcommand == "init":
         cmd_init(args)
+    elif args.subcommand == "fix":
+        sys.exit(cmd_fix(args))
     elif args.subcommand == "add-pack":
         cmd_add_pack(args)
     elif args.subcommand == "list-packs":
