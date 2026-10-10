@@ -49,6 +49,36 @@ class TestHarnessInitScope(unittest.TestCase):
         self.assertTrue((target / ".agents").exists())
         self.assertTrue((target / ".agents" / "harness.config.json").exists())
 
+    def test_cmd_init_project_skips_duplicates_when_global_exists(self):
+        mock_home = Path(self.temp_dir) / "home_with_global"
+        mock_home.mkdir()
+        plugin_dir = mock_home / ".gemini" / "config" / "plugins" / "my-harness"
+        (plugin_dir / "skills" / "code-review").mkdir(parents=True)
+        (plugin_dir / "skills" / "code-review" / "SKILL.md").write_text("skill", encoding="utf-8")
+        (plugin_dir / "rules").mkdir(parents=True)
+        (plugin_dir / "rules" / "AGENTS.md").write_text("rules", encoding="utf-8")
+
+        target = Path(self.temp_dir) / "my_project_skips"
+        target.mkdir()
+
+        args = MagicMock()
+        args.target = str(target)
+        args.scope = "project"
+        args.preset = "universal"
+        args.pack = None
+
+        with patch("pathlib.Path.home", return_value=mock_home):
+            harness.cmd_init(args)
+
+            self.assertTrue((target / ".agents").exists())
+            self.assertTrue((target / ".agents" / "harness.config.json").exists())
+            self.assertTrue((target / ".agents" / "scripts" / "verify_shift_left.py").exists())
+            # skills directory exists, but duplicate skills from global are NOT copied
+            self.assertTrue((target / ".agents" / "skills").exists())
+            self.assertFalse((target / ".agents" / "skills" / "code-review").exists())
+            # duplicate rules from global are NOT copied
+            self.assertFalse((target / ".agents" / "rules" / "shift-left-quality.md").exists())
+
     def test_cmd_init_global_scope(self):
         mock_home = Path(self.temp_dir) / "mock_home"
         mock_home.mkdir()
