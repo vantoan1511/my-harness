@@ -209,18 +209,23 @@ The plan must:
 
 ## Phase 5 — HANDOFF
 
-The output of `/specify` must always strictly adhere to the following format and structure without deviating or preemptively writing implementation code:
+The output of `/specify` must always strictly adhere to the following Markdown heading and bullet structure without deviating or preemptively writing implementation code. Always use blank lines between sections, standard Markdown headings, and bullet lists (`- `) so that chat and markdown renderers preserve formatting without collapsing lines:
 
 ```markdown
-Specification & Implementation Plan Ready
-Feature: [Feature Name]
-Spec: [name].prd.md
-Plan: [name].plan.md
-Contracts Defined: [Contracts defined, e.g. API contract, store actions, or system config]
-Test Strategy: [Test runners and command, e.g. cargo test, npm test, pytest]
-Summary of Decisions
-[Decision Area 1]: [Explanation of decision]
-[Decision Area 2]: [Explanation of decision]
+## Specification & Implementation Plan Ready
+
+- **Feature**: [Feature Name]
+- **Spec**: [name].prd.md
+- **Plan**: [name].plan.md
+- **Test Strategy**: [Test runners and command, e.g., cargo test, npm test, pytest]
+
+### Contracts Defined
+- [Contract 1, e.g. API request/response schema or endpoint parameters]
+- [Contract 2, e.g. State store action or storage model]
+
+### Summary of Decisions
+- **[Decision Area 1]**: [Explanation of decision]
+- **[Decision Area 2]**: [Explanation of decision]
 
 Next Step: Run /implement .agents/PRPs/plans/{name}.plan.md to begin test-driven implementation.
 ```
