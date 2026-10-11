@@ -57,5 +57,12 @@ class TestInstallerE2E(unittest.TestCase):
         self.assertEqual(doc_res.returncode, 0)
         self.assertIn("Doctor check completed", doc_res.stdout)
 
+    def test_installer_update_subcommand(self):
+        # Run harness.py update with --check-only via subprocess
+        cmd = [sys.executable, str(self.repo_root / "harness.py"), "update", "--check-only"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}")
+        self.assertIn("Checking for my-harness updates", result.stdout)
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,11 +12,31 @@ import shutil
 import json
 import argparse
 import subprocess
+import time
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Set, Optional
 
 VERSION = "0.1.0"
+
+@dataclass
+class UpdateCheckResult:
+    is_git_repo: bool
+    current_commit: str
+    remote_commit: str
+    has_update: bool
+    behind_count: int
+    error: Optional[str] = None
+
+@dataclass
+class PluginDeploymentResult:
+    plugin_dir: Path
+    manifest_updated: bool
+    skills_copied: int
+    rules_consolidated: bool
+    assets_copied: bool
+    pip_updated: bool = False
+    errors: list = field(default_factory=list)
 
 @dataclass
 class GlobalInstallationInfo:
@@ -301,6 +321,201 @@ def copy_tree_merge(src: Path, dst: Path):
             if not target.exists() or item.suffix in ('.py', '.json', '.md'):
                 shutil.copy2(item, target)
 
+def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack: Optional[str] = None) -> PluginDeploymentResult:
+    """Packages and deploys my-harness as an Antigravity plugin into target_plugin_dir."""
+    errors = []
+    template_agents = harness_root / "template" / ".agents"
+    target_plugin_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Manifest
+    manifest_updated = False
+    try:
+        plugin_manifest = {
+            "name": "my-harness",
+            "displayName": "Agent Engineering DevKit",
+            "version": VERSION,
+            "description": "Shift-left SDLC workflows: spec-first design, TDD loops, code review, and automated PR delivery.",
+            "logo": "assets/logo.svg",
+            "suggestedPrompts": [
+                "/specify design contract and implementation plan for a new feature",
+                "/tdd-workflow implement failing tests first then pass them",
+                "/code-review inspect uncommitted changes against quality constitution"
+            ]
+        }
+        (target_plugin_dir / "plugin.json").write_text(json.dumps(plugin_manifest, indent=2), encoding="utf-8")
+        manifest_updated = True
+    except Exception as e:
+        errors.append(f"Failed to write plugin.json: {e}")
+
+    # 2. Assets
+    assets_copied = False
+    try:
+        assets_dir = target_plugin_dir / "assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        logo_src = harness_root / "assets" / "logo.svg"
+        if not logo_src.exists():
+            logo_src = harness_root / "template" / "assets" / "logo.svg"
+        if logo_src.exists():
+            shutil.copy2(logo_src, assets_dir / "logo.svg")
+            assets_copied = True
+    except Exception as e:
+        errors.append(f"Failed to copy assets: {e}")
+
+    # 3. README
+    try:
+        plugin_readme_src = harness_root / "template" / "PLUGIN_README.md"
+        if plugin_readme_src.exists():
+            shutil.copy2(plugin_readme_src, target_plugin_dir / "README.md")
+        elif (harness_root / "README.md").exists():
+            shutil.copy2(harness_root / "README.md", target_plugin_dir / "README.md")
+    except Exception as e:
+        errors.append(f"Failed to copy README.md: {e}")
+
+    # 4. Skills
+    skills_copied = 0
+    try:
+        plugin_skills_dir = target_plugin_dir / "skills"
+        copy_tree_merge(template_agents / "skills", plugin_skills_dir)
+        skills_copied = len([s for s in plugin_skills_dir.iterdir() if s.is_dir()])
+    except Exception as e:
+        errors.append(f"Failed to copy skills: {e}")
+
+    # 5. Consolidate rules into rules/AGENTS.md
+    rules_consolidated = False
+    try:
+        rules_target_dir = target_plugin_dir / "rules"
+        rules_target_dir.mkdir(parents=True, exist_ok=True)
+        for old_rule in rules_target_dir.glob("*.md"):
+            if old_rule.name != "AGENTS.md":
+                old_rule.unlink()
+
+        rule_parts = []
+        for r_name in ["shift-left-quality.md", "review-rules.md", "natural-human-writing.md"]:
+            r_path = template_agents / "rules" / r_name
+            if r_path.exists():
+                rule_parts.append(r_path.read_text(encoding="utf-8").strip())
+
+        # Copy pack skills & rules if pack was specified
+        if pack:
+            pack_dir = harness_root / "packs" / pack
+            if (pack_dir / "skills").exists():
+                copy_tree_merge(pack_dir / "skills", target_plugin_dir / "skills")
+            if (pack_dir / "rules").exists():
+                for pr_path in (pack_dir / "rules").glob("*.md"):
+                    rule_parts.append(pr_path.read_text(encoding="utf-8").strip())
+
+        (rules_target_dir / "AGENTS.md").write_text("\n\n---\n\n".join(rule_parts), encoding="utf-8")
+        rules_consolidated = True
+    except Exception as e:
+        errors.append(f"Failed to consolidate rules: {e}")
+
+    # Remove workspace-dependent hooks if present
+    if (target_plugin_dir / "hooks.json").exists():
+        (target_plugin_dir / "hooks.json").unlink()
+
+    return PluginDeploymentResult(
+        plugin_dir=target_plugin_dir,
+        manifest_updated=manifest_updated,
+        skills_copied=skills_copied,
+        rules_consolidated=rules_consolidated,
+        assets_copied=assets_copied,
+        pip_updated=False,
+        errors=errors
+    )
+
+def check_for_updates(harness_root: Path, branch: str = "main") -> UpdateCheckResult:
+    """Checks upstream git repository for commits ahead of local HEAD."""
+    git_dir = harness_root / ".git"
+    if not git_dir.exists():
+        return UpdateCheckResult(
+            is_git_repo=False,
+            current_commit="",
+            remote_commit="",
+            has_update=False,
+            behind_count=0,
+            error="Not a git repository"
+        )
+
+    try:
+        # Check current commit
+        res_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=harness_root,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        current_commit = res_head.stdout.strip()
+
+        # Fetch remote safely
+        subprocess.run(
+            ["git", "fetch", "origin", branch],
+            cwd=harness_root,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Check remote commit
+        res_remote = subprocess.run(
+            ["git", "rev-parse", f"origin/{branch}"],
+            cwd=harness_root,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        remote_commit = res_remote.stdout.strip()
+
+        # Count commits behind
+        res_revlist = subprocess.run(
+            ["git", "rev-list", f"HEAD..origin/{branch}"],
+            cwd=harness_root,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        behind_lines = [line.strip() for line in res_revlist.stdout.splitlines() if line.strip()]
+        behind_count = len(behind_lines)
+
+        return UpdateCheckResult(
+            is_git_repo=True,
+            current_commit=current_commit,
+            remote_commit=remote_commit,
+            has_update=(behind_count > 0),
+            behind_count=behind_count,
+            error=None
+        )
+    except Exception as e:
+        return UpdateCheckResult(
+            is_git_repo=True,
+            current_commit="",
+            remote_commit="",
+            has_update=False,
+            behind_count=0,
+            error=str(e)
+        )
+
+def should_check_for_updates(cache_file: Path, interval_hours: int = 24) -> bool:
+    """Returns True if the update cache is missing or older than interval_hours."""
+    if not cache_file.exists():
+        return True
+    try:
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+        last_check = float(data.get("last_check_timestamp", 0))
+        elapsed = time.time() - last_check
+        return elapsed >= (interval_hours * 3600)
+    except Exception:
+        return True
+
+def save_update_check_state(cache_file: Path, state: dict):
+    """Saves update check state to disk if parent exists."""
+    try:
+        if cache_file.parent.exists():
+            state["last_check_timestamp"] = state.get("last_check_timestamp", time.time())
+            cache_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
 def cmd_init(args):
     harness_root = get_harness_root()
     is_global = getattr(args, "scope", "project") == "global"
@@ -384,70 +599,11 @@ def cmd_init(args):
         gemini_plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
         if gemini_plugins_dir.parent.exists():
             harness_plugin_dir = gemini_plugins_dir / "my-harness"
-            harness_plugin_dir.mkdir(parents=True, exist_ok=True)
-
-            plugin_manifest = {
-                "name": "my-harness",
-                "displayName": "Agent Engineering DevKit",
-                "version": VERSION,
-                "description": "Shift-left SDLC workflows: spec-first design, TDD loops, code review, and automated PR delivery.",
-                "logo": "assets/logo.svg",
-                "suggestedPrompts": [
-                    "/specify design contract and implementation plan for a new feature",
-                    "/tdd-workflow implement failing tests first then pass them",
-                    "/code-review inspect uncommitted changes against quality constitution"
-                ]
-            }
-            (harness_plugin_dir / "plugin.json").write_text(json.dumps(plugin_manifest, indent=2), encoding="utf-8")
-
-            # Copy assets/logo.svg
-            assets_dir = harness_plugin_dir / "assets"
-            assets_dir.mkdir(parents=True, exist_ok=True)
-            logo_src = harness_root / "assets" / "logo.svg"
-            if not logo_src.exists():
-                logo_src = harness_root / "template" / "assets" / "logo.svg"
-            if logo_src.exists():
-                shutil.copy2(logo_src, assets_dir / "logo.svg")
-
-            # Copy plugin README.md
-            plugin_readme_src = harness_root / "template" / "PLUGIN_README.md"
-            if plugin_readme_src.exists():
-                shutil.copy2(plugin_readme_src, harness_plugin_dir / "README.md")
-            elif (harness_root / "README.md").exists():
-                shutil.copy2(harness_root / "README.md", harness_plugin_dir / "README.md")
-
-            # Copy skills to plugin directory
-            copy_tree_merge(template_agents / "skills", harness_plugin_dir / "skills")
-
-            # Consolidate rules into canonical rules/AGENTS.md
-            rules_target_dir = harness_plugin_dir / "rules"
-            rules_target_dir.mkdir(parents=True, exist_ok=True)
-            for old_rule in rules_target_dir.glob("*.md"):
-                if old_rule.name != "AGENTS.md":
-                    old_rule.unlink()
-
-            rule_parts = []
-            for r_name in ["shift-left-quality.md", "review-rules.md", "natural-human-writing.md"]:
-                r_path = template_agents / "rules" / r_name
-                if r_path.exists():
-                    rule_parts.append(r_path.read_text(encoding="utf-8").strip())
-
-            # Copy pack skills & rules if pack was installed
-            if args.pack:
-                pack_dir = harness_root / "packs" / args.pack
-                if (pack_dir / "skills").exists():
-                    copy_tree_merge(pack_dir / "skills", harness_plugin_dir / "skills")
-                if (pack_dir / "rules").exists():
-                    for pr_path in (pack_dir / "rules").glob("*.md"):
-                        rule_parts.append(pr_path.read_text(encoding="utf-8").strip())
-
-            (rules_target_dir / "AGENTS.md").write_text("\n\n---\n\n".join(rule_parts), encoding="utf-8")
-
-            # Do not deploy workspace-dependent hooks into global plugin bundle
-            if (harness_plugin_dir / "hooks.json").exists():
-                (harness_plugin_dir / "hooks.json").unlink()
-
-            print(f"{COLOR_GREEN}[PASS] Installed Antigravity global plugin with all skills and rules ({harness_plugin_dir}){COLOR_RESET}")
+            deploy_res = deploy_antigravity_plugin(harness_root, harness_plugin_dir, pack=args.pack)
+            if deploy_res.errors:
+                print(f"{COLOR_YELLOW}Warning during plugin deployment: {', '.join(deploy_res.errors)}{COLOR_RESET}")
+            else:
+                print(f"{COLOR_GREEN}[PASS] Installed Antigravity global plugin with all skills and rules ({harness_plugin_dir}){COLOR_RESET}")
 
     print(f"\n{COLOR_BOLD}{COLOR_GREEN}✓ my-harness initialization ({'global' if is_global else 'project'}) complete!{COLOR_RESET}")
     if is_global:
@@ -682,6 +838,87 @@ def cmd_sync(args):
     # Sync skills
     copy_tree_merge(template_agents / "skills", target_agents / "skills")
 
+def cmd_update(args) -> int:
+    harness_root = get_harness_root()
+    branch = getattr(args, "branch", "main") or "main"
+    check_only = getattr(args, "check_only", False)
+    force = getattr(args, "force", False)
+    sync_project = getattr(args, "sync_project", False)
+    target_dir = Path(getattr(args, "target", ".") or ".").resolve()
+
+    print(f"{COLOR_CYAN}==> Checking for my-harness updates (branch: {branch})...{COLOR_RESET}")
+
+    check_res = check_for_updates(harness_root, branch=branch)
+    cache_file = Path.home() / ".gemini" / "config" / "plugins" / "my-harness" / ".update_check.json"
+    save_update_check_state(cache_file, {
+        "last_check_timestamp": time.time(),
+        "has_update": check_res.has_update,
+        "current_commit": check_res.current_commit,
+        "remote_commit": check_res.remote_commit,
+        "behind_count": check_res.behind_count
+    })
+
+    if check_res.error:
+        print(f"{COLOR_YELLOW}[WARN] Update check warning: {check_res.error}{COLOR_RESET}")
+    elif check_res.has_update:
+        print(f"{COLOR_YELLOW}[UPDATE AVAILABLE] Upstream has {check_res.behind_count} new commit(s)!{COLOR_RESET}")
+    else:
+        print(f"{COLOR_GREEN}[PASS] Repository is up to date with origin/{branch}.{COLOR_RESET}")
+
+    if check_only:
+        return 0
+
+    # If git repo and has updates, pull unless local working tree is dirty
+    if check_res.is_git_repo and check_res.has_update and not force:
+        try:
+            status_res = subprocess.run(["git", "status", "--porcelain"], cwd=harness_root, capture_output=True, text=True)
+            if status_res.stdout.strip():
+                print(f"{COLOR_YELLOW}[WARN] Working directory has uncommitted changes. Skipping 'git pull'. Run with --force to deploy current working tree.{COLOR_RESET}")
+            else:
+                print(f"{COLOR_CYAN}==> Pulling latest changes from origin/{branch}...{COLOR_RESET}")
+                pull_res = subprocess.run(["git", "pull", "--ff-only", "origin", branch], cwd=harness_root, capture_output=True, text=True)
+                if pull_res.returncode == 0:
+                    print(f"{COLOR_GREEN}[PASS] Successfully pulled latest commits.{COLOR_RESET}")
+                else:
+                    print(f"{COLOR_YELLOW}[WARN] git pull failed ({pull_res.stderr.strip()}). Proceeding with current files.{COLOR_RESET}")
+        except Exception as e:
+            print(f"{COLOR_YELLOW}[WARN] Could not pull from git: {e}{COLOR_RESET}")
+
+    # 1. Update global Antigravity plugin
+    gemini_plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
+    harness_plugin_dir = gemini_plugins_dir / "my-harness"
+    print(f"\n{COLOR_CYAN}==> Updating global Antigravity plugin ({harness_plugin_dir})...{COLOR_RESET}")
+    deploy_res = deploy_antigravity_plugin(harness_root, harness_plugin_dir)
+
+    if deploy_res.errors:
+        print(f"{COLOR_RED}[FAIL] Plugin deployment encountered errors: {', '.join(deploy_res.errors)}{COLOR_RESET}")
+    else:
+        print(f"{COLOR_GREEN}[PASS] Updated manifest, skills ({deploy_res.skills_copied}), and consolidated rules.{COLOR_RESET}")
+
+    # 2. Re-register global CLI via pip if in global environment
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", str(harness_root)], check=True, capture_output=True)
+        print(f"{COLOR_GREEN}[PASS] Refreshed global 'harness' CLI registration.{COLOR_RESET}")
+    except Exception as e:
+        print(f"{COLOR_YELLOW}[WARN] Could not refresh global pip install: {e}{COLOR_RESET}")
+
+    # 3. Optional: Sync current project .agents/
+    if sync_project:
+        target_agents = target_dir / ".agents"
+        if target_agents.exists():
+            print(f"{COLOR_CYAN}==> Syncing project .agents at {target_dir}...{COLOR_RESET}")
+            template_agents = harness_root / "template" / ".agents"
+            copy_tree_merge(template_agents / "scripts", target_agents / "scripts")
+            copy_tree_merge(template_agents / "rules", target_agents / "rules")
+            copy_tree_merge(template_agents / "skills", target_agents / "skills")
+            print(f"{COLOR_GREEN}[PASS] Project .agents successfully synchronized.{COLOR_RESET}")
+        else:
+            print(f"{COLOR_YELLOW}[WARN] No .agents directory found in {target_dir}. Skipping project sync.{COLOR_RESET}")
+
+    print(f"\n{COLOR_BOLD}{COLOR_GREEN}✓ my-harness plugin update complete!{COLOR_RESET}")
+    print(f"{COLOR_CYAN}Tip: If new skills or slash commands were added, restart Antigravity to reload them.{COLOR_RESET}\n")
+    return 0
+
 def cmd_fix(args) -> int:
     target_dir = Path(args.target).resolve()
     target_agents = target_dir / ".agents"
@@ -777,6 +1014,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync = subparsers.add_parser("sync", help="Update core harness scripts and skills in target project")
     p_sync.add_argument("target", nargs="?", default=".", help="Target project directory")
 
+    # update
+    p_update = subparsers.add_parser("update", help="Update my-harness plugin and global CLI from git upstream")
+    p_update.add_argument("target", nargs="?", default=".", help="Target project directory if syncing project")
+    p_update.add_argument("--check-only", action="store_true", help="Only check for available updates without modifying files")
+    p_update.add_argument("--force", action="store_true", help="Force re-packaging and re-deploying plugin even if clean or dirty")
+    p_update.add_argument("--sync-project", action="store_true", help="Also sync current project .agents/ directory")
+    p_update.add_argument("--branch", default="main", help="Git branch to check/pull from (default: main)")
+
     return parser
 
 def main():
@@ -802,6 +1047,8 @@ def main():
         cmd_verify(args)
     elif args.subcommand == "sync":
         cmd_sync(args)
+    elif args.subcommand == "update":
+        sys.exit(cmd_update(args))
 
 if __name__ == "__main__":
     main()

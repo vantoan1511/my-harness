@@ -11,7 +11,7 @@ PACK=""
 # Parse arguments
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        fix|init)
+        fix|init|update)
             COMMAND="$1"
             shift
             ;;
@@ -61,6 +61,11 @@ if [ "$COMMAND" = "fix" ]; then
     if [ -n "$DRY_RUN" ]; then
         ARGS+=("$DRY_RUN")
     fi
+elif [ "$COMMAND" = "update" ]; then
+    ARGS=("$HARNESS_PY" "update")
+    if [ -n "$DRY_RUN" ]; then
+        ARGS+=("--check-only")
+    fi
 else
     # Prompt user interactively if scope is not specified and running in interactive terminal
     if [ -z "$SCOPE" ]; then
@@ -72,13 +77,17 @@ else
             echo "  1) Project (Default) - Install .agents in project directory ($TARGET)"
             echo "  2) Global            - Install .agents in ~/.agents and register 'harness' CLI"
             echo "  3) Fix               - Repair project .agents and deduplicate global items"
+            echo "  4) Update            - Pull latest git changes & update global Antigravity plugin"
             echo "--------------------------------------------------------"
-            read -r -p "Select option [1/2/3] (default: 1): " CHOICE
+            read -r -p "Select option [1/2/3/4] (default: 1): " CHOICE
             if [ "$CHOICE" = "2" ] || [ "$CHOICE" = "global" ]; then
                 SCOPE="global"
             elif [ "$CHOICE" = "3" ] || [ "$CHOICE" = "fix" ]; then
                 COMMAND="fix"
                 ARGS=("$HARNESS_PY" "fix" "$TARGET")
+            elif [ "$CHOICE" = "4" ] || [ "$CHOICE" = "update" ]; then
+                COMMAND="update"
+                ARGS=("$HARNESS_PY" "update")
             else
                 SCOPE="project"
             fi
@@ -86,8 +95,9 @@ else
             SCOPE="project"
         fi
     fi
+fi
 
-    if [ "$COMMAND" != "fix" ]; then
+if [ "$COMMAND" != "fix" ] && [ "$COMMAND" != "update" ]; then
         ARGS=("$HARNESS_PY" "init")
         if [ "$SCOPE" = "global" ]; then
             ARGS+=("--scope" "global")

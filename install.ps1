@@ -24,6 +24,15 @@ if ($Command.ToLower() -eq "fix") {
     exit $LASTEXITCODE
 }
 
+if ($Command.ToLower() -eq "update") {
+    $argsList = @($harnessPy, "update")
+    if ($DryRun) {
+        $argsList += "--check-only"
+    }
+    python @argsList
+    exit $LASTEXITCODE
+}
+
 # Prompt user interactively if scope is not provided and running interactively
 if ([string]::IsNullOrWhiteSpace($Scope)) {
     $isInteractive = [Environment]::UserInteractive -and (-not [Console]::IsInputRedirected)
@@ -34,12 +43,17 @@ if ([string]::IsNullOrWhiteSpace($Scope)) {
         Write-Host "  [1] Project (Default) - Install .agents in project directory ($Target)"
         Write-Host "  [2] Global            - Install .agents in ~/.agents and register 'harness' CLI"
         Write-Host "  [3] Fix               - Repair project .agents and deduplicate global items"
+        Write-Host "  [4] Update            - Pull latest git changes & update global Antigravity plugin"
         Write-Host "--------------------------------------------------------"
-        $choice = Read-Host "Select option [1/2/3] (default: 1)"
+        $choice = Read-Host "Select option [1/2/3/4] (default: 1)"
         if ($choice -eq "2" -or $choice -eq "global") {
             $Scope = "global"
         } elseif ($choice -eq "3" -or $choice -eq "fix") {
             $argsList = @($harnessPy, "fix", $Target)
+            python @argsList
+            exit $LASTEXITCODE
+        } elseif ($choice -eq "4" -or $choice -eq "update") {
+            $argsList = @($harnessPy, "update")
             python @argsList
             exit $LASTEXITCODE
         } else {

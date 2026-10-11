@@ -110,6 +110,7 @@ python d:/Projects/my-harness/harness.py init --scope global
 | `harness doctor [path]` | Health check: verifies directory structure, JSON, scripts, and git |
 | `harness verify [--changed\|--all] [path]` | Runs shift-left pre-flight verification scanner |
 | `harness sync [path]` | Updates core harness scripts and universal skills in target project |
+| `harness update [--check-only] [--force] [--sync-project]` | Pulls latest upstream git changes, updates global Antigravity plugin and CLI |
 
 ---
 
