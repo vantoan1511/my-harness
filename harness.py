@@ -409,6 +409,17 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
     except Exception as e:
         errors.append(f"Failed to consolidate rules: {e}")
 
+    # 6. Portable Scripts
+    try:
+        scripts_src = harness_root / "scripts"
+        if scripts_src.exists():
+            scripts_target_dir = target_plugin_dir / "scripts"
+            scripts_target_dir.mkdir(parents=True, exist_ok=True)
+            for s_file in scripts_src.glob("*.py"):
+                shutil.copy2(s_file, scripts_target_dir / s_file.name)
+    except Exception as e:
+        errors.append(f"Failed to copy portable scripts: {e}")
+
     # Remove workspace-dependent hooks if present
     if (target_plugin_dir / "hooks.json").exists():
         (target_plugin_dir / "hooks.json").unlink()
