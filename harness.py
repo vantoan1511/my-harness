@@ -46,10 +46,24 @@ class GlobalInstallationInfo:
     global_skills: Set[str] = field(default_factory=set)
     global_rules: Set[str] = field(default_factory=set)
 
+def get_gemini_config_dir() -> Path:
+    env_dir = os.environ.get("GEMINI_CONFIG_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".gemini" / "config"
+
+def get_global_plugin_dir() -> Path:
+    return get_gemini_config_dir() / "plugins" / "my-harness"
+
+def get_global_agents_dir() -> Path:
+    env_dir = os.environ.get("AGENTS_GLOBAL_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".agents"
+
 def detect_global_installation() -> GlobalInstallationInfo:
-    home = Path.home()
-    plugin_dir = home / ".gemini" / "config" / "plugins" / "my-harness"
-    global_agents = home / ".agents"
+    plugin_dir = get_global_plugin_dir()
+    global_agents = get_global_agents_dir()
 
     has_plugin = plugin_dir.exists()
     has_global_agents = global_agents.exists()
@@ -310,15 +324,20 @@ def detect_project_stack(target_dir: Path) -> dict:
 
     return stack
 
-def copy_tree_merge(src: Path, dst: Path):
+def copy_tree_merge(src: Path, dst: Path, overwrite_configs: bool = False):
     """Recursively copies src to dst, merging without overwriting non-empty existing dirs."""
     dst.mkdir(parents=True, exist_ok=True)
     for item in src.iterdir():
         target = dst / item.name
         if item.is_dir():
-            copy_tree_merge(item, target)
+            copy_tree_merge(item, target, overwrite_configs=overwrite_configs)
         else:
-            if not target.exists() or item.suffix in ('.py', '.json', '.md'):
+            if not target.exists():
+                shutil.copy2(item, target)
+            elif item.name in ("harness.config.json", "hooks.json") and not overwrite_configs:
+                # Preserve existing project configuration files
+                continue
+            elif item.suffix in ('.py', '.json', '.md'):
                 shutil.copy2(item, target)
 
 def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack: Optional[str] = None) -> PluginDeploymentResult:
@@ -598,18 +617,19 @@ def cmd_init(args):
 
     # 5. Global CLI installation via pip if global scope
     if is_global:
-        print(f"\n{COLOR_CYAN}==> Registering 'harness' CLI globally via pip...{COLOR_RESET}")
-        try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "-e", str(harness_root)], check=True)
-            print(f"{COLOR_GREEN}[PASS] Successfully registered 'harness' CLI globally{COLOR_RESET}")
-        except Exception as e:
-            print(f"{COLOR_YELLOW}Warning: Failed to pip install harness globally: {e}{COLOR_RESET}")
-            print(f"{COLOR_YELLOW}Tip: You can manually run: pip install -e {harness_root}{COLOR_RESET}")
+        if not os.environ.get("NO_PIP_INSTALL"):
+            print(f"\n{COLOR_CYAN}==> Registering 'harness' CLI globally via pip...{COLOR_RESET}")
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "-e", str(harness_root)], check=True)
+                print(f"{COLOR_GREEN}[PASS] Successfully registered 'harness' CLI globally{COLOR_RESET}")
+            except Exception as e:
+                print(f"{COLOR_YELLOW}Warning: Failed to pip install harness globally: {e}{COLOR_RESET}")
+                print(f"{COLOR_YELLOW}Tip: You can manually run: pip install -e {harness_root}{COLOR_RESET}")
 
         # 6. Antigravity plugin installation: package into ~/.gemini/config/plugins/my-harness
-        gemini_plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
-        if gemini_plugins_dir.parent.exists():
-            harness_plugin_dir = gemini_plugins_dir / "my-harness"
+        gemini_plugins_dir = get_gemini_config_dir() / "plugins"
+        if gemini_plugins_dir.parent.exists() or os.environ.get("GEMINI_CONFIG_DIR"):
+            harness_plugin_dir = get_global_plugin_dir()
             deploy_res = deploy_antigravity_plugin(harness_root, harness_plugin_dir, pack=args.pack)
             if deploy_res.errors:
                 print(f"{COLOR_YELLOW}Warning during plugin deployment: {', '.join(deploy_res.errors)}{COLOR_RESET}")
@@ -860,7 +880,7 @@ def cmd_update(args) -> int:
     print(f"{COLOR_CYAN}==> Checking for my-harness updates (branch: {branch})...{COLOR_RESET}")
 
     check_res = check_for_updates(harness_root, branch=branch)
-    cache_file = Path.home() / ".gemini" / "config" / "plugins" / "my-harness" / ".update_check.json"
+    cache_file = get_global_plugin_dir() / ".update_check.json"
     save_update_check_state(cache_file, {
         "last_check_timestamp": time.time(),
         "has_update": check_res.has_update,
@@ -896,8 +916,7 @@ def cmd_update(args) -> int:
             print(f"{COLOR_YELLOW}[WARN] Could not pull from git: {e}{COLOR_RESET}")
 
     # 1. Update global Antigravity plugin
-    gemini_plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
-    harness_plugin_dir = gemini_plugins_dir / "my-harness"
+    harness_plugin_dir = get_global_plugin_dir()
     print(f"\n{COLOR_CYAN}==> Updating global Antigravity plugin ({harness_plugin_dir})...{COLOR_RESET}")
     deploy_res = deploy_antigravity_plugin(harness_root, harness_plugin_dir)
 

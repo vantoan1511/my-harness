@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import shutil
 import sys
+import json
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -48,6 +49,31 @@ class TestHarnessInitScope(unittest.TestCase):
 
         self.assertTrue((target / ".agents").exists())
         self.assertTrue((target / ".agents" / "harness.config.json").exists())
+
+    def test_cmd_init_preserves_existing_custom_config(self):
+        target = Path(self.temp_dir) / "project_with_custom_config"
+        agents_dir = target / ".agents"
+        agents_dir.mkdir(parents=True)
+        config_file = agents_dir / "harness.config.json"
+        custom_rule = {"id": "custom-banned-rule", "description": "Custom rule"}
+        config_file.write_text(json.dumps({
+            "project_name": "pre-existing",
+            "rules": {
+                "banned_patterns": [custom_rule]
+            }
+        }), encoding="utf-8")
+
+        args = MagicMock()
+        args.target = str(target)
+        args.scope = "project"
+        args.preset = "universal"
+        args.pack = None
+
+        harness.cmd_init(args)
+
+        loaded = json.loads(config_file.read_text(encoding="utf-8"))
+        self.assertIn("rules", loaded)
+        self.assertEqual(loaded["rules"]["banned_patterns"], [custom_rule])
 
     def test_cmd_init_project_skips_duplicates_when_global_exists(self):
         mock_home = Path(self.temp_dir) / "home_with_global"

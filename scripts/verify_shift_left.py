@@ -111,7 +111,7 @@ def main() -> int:
     # 1. Project delegation: if project has its own script, delegate
     proj_script = find_project_script()
     if proj_script and proj_script.resolve() != Path(__file__).resolve():
-        print(f"[INFO] Delegating to workspace script: {proj_script}")
+        print(f"[INFO] Delegating to workspace script: {proj_script}", flush=True)
         res = subprocess.run([sys.executable, str(proj_script)] + sys.argv[1:])
         return res.returncode
 

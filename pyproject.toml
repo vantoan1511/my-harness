@@ -27,3 +27,6 @@ harness = "harness:main"
 
 [tool.setuptools]
 py-modules = ["harness"]
+
+[tool.setuptools.package-data]
+"*" = ["template/**/*", "packs/**/*", "scripts/*", "assets/*"]
