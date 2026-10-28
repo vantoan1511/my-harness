@@ -1,0 +1,60 @@
+[
+  {
+    "id": "eval_cross_platform_safety",
+    "description": "Ensure skill does not contain bash-specific constructs incompatible with Windows PowerShell",
+    "target_file": "SKILL.md",
+    "prohibited_patterns": [
+      "2>/dev/null",
+      "while IFS= read",
+      "\\\\\\s*\\n\\s*-[fF]"
+    ],
+    "explanation": "Bash-specific redirections and multi-line backslash continuations fail in PowerShell on Windows."
+  },
+  {
+    "id": "eval_workspace_safety_no_destructive_checkout",
+    "description": "Ensure PR review mode avoids destructive branch checkout in active workspace",
+    "target_file": "SKILL.md",
+    "required_patterns": [
+      "Workspace Preservation",
+      "git show",
+      "worktree"
+    ],
+    "prohibited_patterns": [
+      "(?<!DO NOT run `)gh pr checkout"
+    ],
+    "explanation": "Direct checkout overwrites uncommitted user files and alters working tree state."
+  },
+  {
+    "id": "eval_human_approval_gate",
+    "description": "Ensure automated APPROVE or REQUEST_CHANGES reviews require explicit human confirmation",
+    "target_file": "SKILL.md",
+    "required_patterns": [
+      "Human Approval Gate",
+      "Never publish review judgments"
+    ],
+    "explanation": "AI reviews must not auto-submit binding approvals or change requests without user sign-off."
+  },
+  {
+    "id": "eval_adaptive_reading_context_exhaustion",
+    "description": "Ensure skill advises against reading all changed files in full for large diffs",
+    "target_file": "SKILL.md",
+    "required_patterns": [
+      "Adaptive Scope",
+      "subagent"
+    ],
+    "prohibited_patterns": [
+      "Read each changed file in full"
+    ],
+    "explanation": "Reading all changed files in full causes context exhaustion and token throttling."
+  },
+  {
+    "id": "eval_targeted_validation",
+    "description": "Ensure validation phase promotes targeted testing rather than blind full-suite runs",
+    "target_file": "SKILL.md",
+    "required_patterns": [
+      "Targeted",
+      "npx tsc --noEmit"
+    ],
+    "explanation": "Targeted testing accelerates feedback and prevents long-running suite timeouts."
+  }
+]
