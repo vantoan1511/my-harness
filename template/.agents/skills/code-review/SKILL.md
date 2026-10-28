@@ -5,213 +5,208 @@ description: Code review — local uncommitted changes or GitHub PR (pass PR num
 
 # Code Review
 
-**Input**: The PR number, URL, or empty for local review.
+**Input**: PR number, PR URL, `--pr <branch>`, or empty for local review.
 
 ---
 
 ## Mode Selection
 
-If the user provides a PR number, PR URL, or `--pr`:
-→ Jump to **PR Review Mode** below.
-
-Otherwise:
-→ Use **Local Review Mode**.
+- If user provides PR number, PR URL, `--pr`, or target branch:
+  → Jump to **PR Review Mode**.
+- Otherwise:
+  → Use **Local Review Mode**.
 
 ---
 
 ## Local Review Mode
 
-Comprehensive security and quality review of uncommitted changes.
+Fast, shift-left quality and security audit of uncommitted working tree changes.
 
 ### Phase 1 — GATHER & PRE-FLIGHT
 
-```bash
-# 1. List changed files
-git diff --name-only HEAD
+1. Inspect changed files & diff overview:
+   ```bash
+   git status --short
+   git diff --stat HEAD
+   ```
 
-# 2. Run Shift-Left Pre-Flight Scanner
-python .agents/scripts/verify_shift_left.py --changed
-```
+2. Run Shift-Left Pre-Flight Scanner (cross-platform compatible):
+   ```bash
+   python -m scripts.verify_shift_left --changed 2>$null || python -c "import os, subprocess; p=os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); subprocess.run(['python', p, '--changed']) if os.path.exists(p) else None"
+   ```
 
-If no changed files, stop: "Nothing to review."
-If shift-left scanner fails with violations, treat them as CRITICAL/HIGH blockers immediately.
+3. Early termination:
+   - If no changed files: Stop and inform user: *"Nothing to review."*
+   - If shift-left scanner detects blocker violations (secrets, debugger leaks, merge conflict markers): Treat as **CRITICAL/HIGH** blockers immediately.
 
-### Phase 2 — REVIEW
+### Phase 2 — ADAPTIVE SCOPE REVIEW
 
-Read each changed file in full. Check for:
+Avoid reading every file in its entirety to prevent context exhaustion and rate limits:
 
-**Security Issues (CRITICAL):**
-- Hardcoded credentials, API keys, tokens
-- SQL injection vulnerabilities
-- XSS vulnerabilities
-- Missing input validation
-- Insecure dependencies
-- Path traversal risks
+1. **Diff-First Inspection**: Read `git diff HEAD` to examine changed blocks and immediate context.
+2. **Context Expansion**: Only read full files or expanded ranges ($\pm 30$ lines) for:
+   - Core domain models, architecture boundaries, security/auth layers.
+   - Complex refactorings or public API signatures.
+3. **Subagent Delegation for Large Diff**:
+   - If total changed files $> 10$ or diff $> 500$ lines, launch a review subagent (e.g. `research` or module-specific reviewer) to evaluate chunks and report structured findings.
 
-**Architecture & Extensibility (HIGH):**
-- Consider the whole architecture, not just the code changed.
-- Avoid "band-aid" fixes or simply adding to existing complexity (e.g., adding another `if-else` to a growing chain).
-- Evaluate if the change warrants a deeper refactor or abstraction for future extensibility.
-- Suggest appropriate architectural patterns (e.g., polymorphism, strategy pattern) if the area is likely to be extended again.
+Evaluate against the **Shift-Left Quality Review Constitution**:
 
-**Code Quality (HIGH):**
-- Functions > 50 lines
-- Files > 800 lines
-- Nesting depth > 4 levels
-- Missing error handling
-- console.log or unformatted debug statements
-- TODO/FIXME comments
-- Missing docstrings for public APIs
+#### 1. Security Issues (CRITICAL)
+- Hardcoded credentials, secrets, tokens, API keys
+- Injection risks (SQL, OS command, LDAP, template)
+- XSS and unescaped input rendering
+- Missing input/boundary validation, unsafe deserialization
+- Path traversal vulnerabilities
 
-**Best Practices (MEDIUM):**
-- Mutation patterns (use immutable instead)
-- Emoji usage in code/comments
-- Missing tests for new code
-- Accessibility issues (a11y)
-- Avoid hardcoded literal strings; always define semantic constants for reusability.
-- Do not blindly reuse constants with mismatched semantic contexts.
+#### 2. Architecture & Boundary Discipline (HIGH)
+- Respect layer boundaries, dependency direction (DIP), and single responsibility (SRP).
+- Prohibit band-aid additive branching (e.g. nested `if-else` chains $\ge 3$ branches without lookup tables/strategies).
+- Ensure interfaces remain decoupled from concrete 3rd-party clients.
 
-### Phase 3 — REPORT
+#### 3. Code Reuse, Anti-WET & Design (HIGH)
+- Identify unnecessary duplication across utilities, styles, and logic.
+- Avoid premature or leaky abstractions; favor simplicity (KISS, YAGNI).
 
-Generate report with:
+#### 4. Code Smells & Maintainability (HIGH)
+- Large functions (>50 lines) or overly complex files (>800 lines).
+- Deep nesting (>3 levels).
+- Magic strings, numbers, untyped blobs (prefer typed models, enums, constants).
+- Silent error swallowing (`catch (e) {}` with no logging or recovery).
+
+#### 5. Consistency & Native Repository Feel (MEDIUM)
+- Naming conventions, error structures, state management, idiomatic formatting.
+- Semantic constants over ad-hoc literals.
+
+### Phase 3 — REPORT & GATES
+
+Generate structured report:
 - Severity: CRITICAL, HIGH, MEDIUM, LOW
-- File location and line numbers
-- Issue description
-- Suggested fix
-
-Block commit if CRITICAL or HIGH issues found.
-Never approve code with security vulnerabilities.
+- Location: `file_path:line_number`
+- Issue description and concrete suggested fix
+- Block merges/commits if CRITICAL or HIGH issues exist.
 
 ---
 
 ## PR Review Mode
 
-Comprehensive GitHub PR review — fetches diff, reads full files, runs validation, posts review.
+Comprehensive GitHub PR review with branch isolation, targeted testing, and non-destructive context gathering.
 
-### Phase 1 — FETCH
+### Phase 1 — FETCH & METADATA
 
-Parse input to determine PR:
+1. Extract PR number or search by branch:
+   ```bash
+   # Branch input:
+   gh pr list --head <branch> --json number,title
+   # View PR summary:
+   gh pr view <NUMBER> --json number,title,body,author,baseRefName,headRefName,changedFiles,additions,deletions
+   ```
 
-| Input | Action |
+2. Inspect PR stats and changed files list:
+   ```bash
+   gh pr diff <NUMBER> --name-only
+   ```
+
+### Phase 2 — NON-DESTRUCTIVE CONTEXT GATHERING
+
+> [!WARNING]
+> **Workspace Preservation**: Do NOT run `gh pr checkout <NUMBER>` directly inside a dirty or active working branch to avoid overwriting uncommitted work or causing branch drift.
+
+Use non-destructive inspection techniques:
+1. **Targeted Git Inspection**:
+   ```bash
+   git fetch origin <headRefName> --depth=50
+   git show origin/<headRefName>:<path/to/file>
+   ```
+2. **Isolated Worktree (Only for heavy local testing if needed)**:
+   ```bash
+   git worktree add .agents/worktree-pr-<NUMBER> origin/<headRefName>
+   # Cleanup after completion: git worktree remove --force .agents/worktree-pr-<NUMBER>
+   ```
+
+3. Read contextual guidelines:
+   - Project rules: `AGENTS.md`, `GEMINI.md`, `.agents/rules/`
+   - PR description and linked issues for intended behavior.
+
+### Phase 3 — ADAPTIVE REVIEW & CATEGORIZATION
+
+1. Review unified diff first (`gh pr diff <NUMBER>`).
+2. Read surrounding code context only where logic depends on outside states or invariants.
+3. Categorize findings:
+
+| Category | Key Verifications |
 |---|---|
-| Number (e.g. `42`) | Use as PR number |
-| URL (`github.com/.../pull/42`) | Extract PR number |
-| Branch name | Find PR via `gh pr list --head <branch>` |
+| **Architecture** | Layer boundaries, anti-spaghetti, extensible patterns |
+| **Correctness** | Logic bugs, null safety, off-by-one, race conditions, edge cases |
+| **Type Safety** | No arbitrary `any`, proper type narrowing, sound interfaces |
+| **Security** | Secrets, injections, path traversals, authn/authz gaps |
+| **Performance** | N+1 queries, unbounded iterations, memory leaks, I/O blocking |
+| **Maintainability** | Magic literals, deep nesting, missing tests, unhandled errors |
 
+Severities:
+- **CRITICAL**: Immediate security or data loss hazard. (Blocker)
+- **HIGH**: Logic flaw, breaking contract, or high-risk defect. (Blocker)
+- **MEDIUM**: Code smell, architectural drift, or missing best practice.
+- **LOW**: Minor stylistic nit, comment formatting.
+
+### Phase 4 — IMPACTED / TARGETED VALIDATION
+
+Avoid running unconstrained full-repository test suites blindly. Execute fast checks first, followed by targeted tests covering modified paths:
+
+**Node.js / TypeScript**:
 ```bash
-gh pr view <NUMBER> --json number,title,body,author,baseRefName,headRefName,changedFiles,additions,deletions
-gh pr diff <NUMBER>
+# Type check (fast)
+npx tsc --noEmit
+# Lint
+npm run lint -- --max-warnings=0
+# Targeted Unit Test (pass changed test file or pattern)
+npm test -- <path/to/test-or-spec>
 ```
 
-If PR not found, stop with error. Store PR metadata for later phases.
-
-### Phase 2 — CONTEXT
-
-Build review context:
-
-1. **Project rules** — Read `AGENTS.md`, `GEMINI.md`, `.agents/docs/`, and any contributing guidelines
-2. **Planning artifacts** — Check `.agents/PRPs/prds/`, `.agents/PRPs/plans/`, `.agents/PRPs/reports/`, and `.agents/reviews/` for context related to this PR
-3. **PR intent** — Parse PR description for goals, linked issues, test plans
-4. **Changed files** — List all modified files and categorize by type (source, test, config, docs)
-
-### Phase 3 — REVIEW
-
-Read each changed file **in full** (not just the diff hunks — you need surrounding context).
-
-For PR reviews, fetch the full file contents at the PR head revision:
+**Python**:
 ```bash
-gh pr diff <NUMBER> --name-only | while IFS= read -r file; do
-  gh api "repos/{owner}/{repo}/contents/$file?ref=<head-branch>" --jq '.content' | base64 -d
-done
+# Targeted pytest on modified test modules
+pytest <path/to/test_file.py>
 ```
 
-Apply the review checklist across 7 categories:
-
-| Category | What to Check |
-|---|---|
-| **Architecture** | Consider the whole architecture. Avoid "band-aid" additive fixes (e.g., growing if-else chains). Suggest deeper refactors or abstractions if future extension is likely. |
-| **Correctness** | Logic errors, off-by-ones, null handling, edge cases, race conditions |
-| **Type Safety** | Type mismatches, unsafe casts, `any` usage, missing generics |
-| **Pattern Compliance** | Matches project conventions (naming, file structure, error handling, imports) |
-| **Security** | Injection, auth gaps, secret exposure, SSRF, path traversal, XSS |
-| **Performance** | N+1 queries, missing indexes, unbounded loops, memory leaks, large payloads |
-| **Completeness** | Missing tests, missing error handling, incomplete migrations, missing docs |
-| **Maintainability** | Dead code, magic numbers, hardcoded literal strings (use semantic constants, don't reuse from wrong contexts), deep nesting, unclear naming, missing types |
-
-Assign severity to each finding:
-
-| Severity | Meaning | Action |
-|---|---|---|
-| **CRITICAL** | Security vulnerability or data loss risk | Must fix before merge |
-| **HIGH** | Bug or logic error likely to cause issues | Should fix before merge |
-| **MEDIUM** | Code quality issue or missing best practice | Fix recommended |
-| **LOW** | Style nit or minor suggestion | Optional |
-
-### Phase 4 — VALIDATE
-
-Run available validation commands:
-
-Detect the project type from config files (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.), then run the appropriate commands:
-
-**Node.js / TypeScript** (has `package.json`):
+**Rust**:
 ```bash
-npm run type-check 2>/dev/null || npx tsc --noEmit 2>/dev/null  # Type check
-npm run lint                                                    # Lint
-npm test                                                        # Tests
-npm run build                                                   # Build
+cargo clippy -- -D warnings
+cargo test <test_name_filter>
 ```
 
-**Rust** (has `Cargo.toml`):
+**Go**:
 ```bash
-cargo clippy -- -D warnings  # Lint
-cargo test                   # Tests
-cargo build                  # Build
+go vet ./...
+go test -run <TestPattern> ./<package_path>/...
 ```
 
-**Go** (has `go.mod`):
-```bash
-go vet ./...    # Lint
-go test ./...   # Tests
-go build ./...  # Build
-```
+*Note: Offer the user the option to run the full comprehensive test suite if all targeted checks pass.*
 
-**Python** (has `pyproject.toml` / `setup.py`):
-```bash
-pytest  # Tests
-```
-
-Run only the commands that apply to the detected project type. Record pass/fail for each.
-
-### Phase 5 — DECIDE
-
-Form recommendation based on findings:
+### Phase 5 — DECISION MATRIX
 
 | Condition | Decision |
 |---|---|
-| Zero CRITICAL/HIGH issues, validation passes | **APPROVE** |
-| Only MEDIUM/LOW issues, validation passes | **APPROVE** with comments |
-| Any HIGH issues or validation failures | **REQUEST CHANGES** |
-| Any CRITICAL issues | **BLOCK** — must fix before merge |
+| Zero CRITICAL/HIGH issues, all targeted validation passes | **APPROVE** |
+| Only MEDIUM/LOW issues, validation passes | **APPROVE** with suggestions |
+| Any HIGH issue or failed validation | **REQUEST CHANGES** |
+| Any CRITICAL issue (security/data integrity) | **BLOCK** |
+| Draft PR | **COMMENT** only |
 
-Special cases:
-- Draft PR → Always use **COMMENT** (not approve/block)
-- Only docs/config changes → Lighter review, focus on correctness
-- Explicit `--approve` or `--request-changes` flag → Override decision (but still report all findings)
+### Phase 6 — ARTIFACT GENERATION
 
-### Phase 6 — REPORT
-
-Create review artifact at `.agents/reviews/pr-<NUMBER>-review.md`:
+Write report to `.agents/reviews/pr-<NUMBER>-review.md`:
 
 ```markdown
 # PR Review: #<NUMBER> — <TITLE>
 
 **Reviewed**: <date>
 **Author**: <author>
-**Branch**: <head> → <base>
+**Branch**: <headRef> → <baseRef>
 **Decision**: APPROVE | REQUEST CHANGES | BLOCK
 
 ## Summary
-<1-2 sentence overall assessment>
+<Concise assessment of changes and risk level>
 
 ## Findings
 
@@ -228,74 +223,52 @@ Create review artifact at `.agents/reviews/pr-<NUMBER>-review.md`:
 <findings or "None">
 
 ## Validation Results
-
-| Check | Result |
-|---|---|
-| Type check | Pass / Fail / Skipped |
-| Lint | Pass / Fail / Skipped |
-| Tests | Pass / Fail / Skipped |
-| Build | Pass / Fail / Skipped |
+| Check | Target / Command | Result |
+|---|---|---|
+| Type Check | ... | Pass / Fail / Skipped |
+| Linter | ... | Pass / Fail / Skipped |
+| Targeted Tests | ... | Pass / Fail / Skipped |
 
 ## Files Reviewed
-<list of files with change type: Added/Modified/Deleted>
+<list of modified files and review depths>
 ```
 
-### Phase 7 — PUBLISH
+### Phase 7 — PUBLISH (HUMAN APPROVAL GATE)
 
-Post the review to GitHub:
+> [!IMPORTANT]
+> **Human Approval Gate**: Never publish review judgments (`APPROVE` / `REQUEST_CHANGES`) directly to remote GitHub repositories without explicit confirmation from the user.
+
+When the user gives approval or specifies `--submit`:
 
 ```bash
-# If APPROVE
-gh pr review <NUMBER> --approve --body "<summary of review>"
+# Post comment summary
+gh pr review <NUMBER> --comment --body "<summary_content>"
 
-# If REQUEST CHANGES
-gh pr review <NUMBER> --request-changes --body "<summary with required fixes>"
+# Post review approval
+gh pr review <NUMBER> --approve --body "<summary_content>"
 
-# If COMMENT only (draft PR or informational)
-gh pr review <NUMBER> --comment --body "<summary>"
+# Post request changes
+gh pr review <NUMBER> --request-changes --body "<required_fixes>"
 ```
 
-For inline comments on specific lines, use the GitHub review comments API:
+For batch inline comments, save payload to a temporary JSON file and submit via GitHub API (PowerShell & Bash safe):
 ```bash
-gh api "repos/{owner}/{repo}/pulls/<NUMBER>/comments" \
-  -f body="<comment>" \
-  -f path="<file>" \
-  -F line=<line-number> \
-  -f side="RIGHT" \
-  -f commit_id="$(gh pr view <NUMBER> --json headRefOid --jq .headRefOid)"
+gh api "repos/{owner}/{repo}/pulls/<NUMBER>/reviews" -f event="COMMENT" -f body="Automated Code Review" --input comments.json
 ```
 
-Alternatively, post a single review with multiple inline comments at once:
-```bash
-gh api "repos/{owner}/{repo}/pulls/<NUMBER>/reviews" \
-  -f event="COMMENT" \
-  -f body="<overall summary>" \
-  --input comments.json  # [{"path": "file", "line": N, "body": "comment"}, ...]
-```
+### Phase 8 — SUMMARY OUTPUT
 
-### Phase 8 — OUTPUT
-
-Report to user:
-
-```
-PR #<NUMBER>: <TITLE>
-Decision: <APPROVE|REQUEST_CHANGES|BLOCK>
-
-Issues: <critical_count> critical, <high_count> high, <medium_count> medium, <low_count> low
-Validation: <pass_count>/<total_count> checks passed
-
-Artifacts:
-  Review: .agents/reviews/pr-<NUMBER>-review.md
-  GitHub: <PR URL>
-
-Next steps:
-  - <contextual suggestions based on decision>
-```
+Present summary directly in chat:
+- PR title & link
+- Decision summary
+- Count of CRITICAL / HIGH / MEDIUM / LOW findings
+- Link to local review artifact
+- Suggested next actions
 
 ---
 
-## Edge Cases
+## Edge Cases & Fail-safes
 
-- **No `gh` CLI**: Fall back to local-only review (read the diff, skip GitHub publish). Warn user.
-- **Diverged branches**: Suggest `git fetch origin && git rebase origin/<base>` before review.
-- **Large PRs (>50 files)**: Warn about review scope. Focus on source changes first, then tests, then config/docs.
+- **No `gh` CLI or Unauthenticated**: Fall back cleanly to local-only git diff review and report locally.
+- **Large PRs (>10 files or >500 LOC)**: Automatically trigger adaptive sampling; prioritize interface contracts, security layers, and data mutations; recommend subagent delegation.
+- **Diverged / Out-of-date Branches**: Check if base branch is behind `origin/<baseRef>` and warn before running validation tests.
