@@ -26,7 +26,8 @@ class TestSpecifyHandoffFormat(unittest.TestCase):
             self.assertIn("- **Spec**:", content, f"{path} must contain bulleted - **Spec**:")
             self.assertIn("- **Plan**:", content, f"{path} must contain bulleted - **Plan**:")
             self.assertIn("- **Test Strategy**:", content, f"{path} must contain bulleted - **Test Strategy**:")
-            self.assertIn("Next Step: Run /implement .agents/PRPs/plans/{name}.plan.md to begin test-driven implementation.", content, f"{path} must contain Next Step handoff trigger")
+            self.assertIn("> **Recommended Next Step (Clean Context & Low Effort)**:", content, f"{path} must contain Recommended Next Step header")
+            self.assertIn("```text\n> /implement @.agents/PRPs/plans/{name}.plan.md\n> ```", content, f"{path} must contain copyable code block for /implement")
 
 if __name__ == "__main__":
     unittest.main()
