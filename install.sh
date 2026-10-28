@@ -98,16 +98,15 @@ else
 fi
 
 if [ "$COMMAND" != "fix" ] && [ "$COMMAND" != "update" ]; then
-        ARGS=("$HARNESS_PY" "init")
-        if [ "$SCOPE" = "global" ]; then
-            ARGS+=("--scope" "global")
-        else
-            ARGS+=("$TARGET" "--scope" "project")
-        fi
+    ARGS=("$HARNESS_PY" "init")
+    if [ "$SCOPE" = "global" ]; then
+        ARGS+=("--scope" "global")
+    else
+        ARGS+=("$TARGET" "--scope" "project")
+    fi
 
-        if [ -n "$PACK" ]; then
-            ARGS+=("--pack" "$PACK")
-        fi
+    if [ -n "$PACK" ]; then
+        ARGS+=("--pack" "$PACK")
     fi
 fi
 

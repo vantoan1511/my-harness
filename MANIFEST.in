@@ -1,0 +1,7 @@
+include LICENSE
+include README.md
+include harness.schema.json
+recursive-include template *
+recursive-include packs *
+recursive-include scripts *
+recursive-include assets *

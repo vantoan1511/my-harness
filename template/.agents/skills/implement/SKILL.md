@@ -29,11 +29,11 @@ Execute a plan file step-by-step with continuous validation, then seamlessly com
 
 ### Validation Scripts
 
-Check `package.json` (or equivalent build / configuration file) for available scripts:
+Check `package.json` (or equivalent build / configuration file) for available scripts using file reading tools or:
 
 ```bash
-# For Node.js projects
-cat package.json | grep -A 20 '"scripts"'
+# For Node.js projects (PowerShell & Bash safe)
+python -c "import json; print(json.load(open('package.json')).get('scripts', {}))"
 ```
 
 Note available commands for: type-check, lint, test, build.
@@ -42,11 +42,7 @@ Note available commands for: type-check, lint, test, build.
 
 ## Phase 1 — LOAD
 
-Read the plan file:
-
-```bash
-cat "$ARGUMENTS"
-```
+Read the plan file using your file reading tools (e.g., `read_file` on `$ARGUMENTS`):
 
 Extract these sections from the plan:
 - **Summary** — What is being built
@@ -87,7 +83,7 @@ git status --porcelain
 ### Sync Remote
 
 ```bash
-git pull --rebase origin $(git branch --show-current) 2>/dev/null || true
+git pull --rebase origin HEAD
 ```
 
 **CHECKPOINT**: On correct branch. Working tree ready. Remote synced.
@@ -335,7 +331,7 @@ Seamlessly push the feature branch to the remote and create or update the GitHub
 ```bash
 git branch --show-current
 git status --short
-git log origin/main..HEAD --oneline 2>/dev/null || git log main..HEAD --oneline
+git log origin/main..HEAD --oneline
 ```
 
 | Check | Condition | Action if Failed |
@@ -347,8 +343,7 @@ git log origin/main..HEAD --oneline 2>/dev/null || git log main..HEAD --oneline
 ### 2. Check for Existing PR
 
 ```bash
-CURRENT_BRANCH=$(git branch --show-current)
-EXISTING_PR=$(gh pr list --head "$CURRENT_BRANCH" --json number,url --jq '.[0]' 2>/dev/null || true)
+gh pr view --json number,url 2>$null || gh pr list --state open --json number,url --jq ".[0]"
 ```
 
 - If a PR already exists for this branch:

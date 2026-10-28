@@ -57,11 +57,11 @@ Generate a concise, focused, and high-signal changelog for a pull request or bra
 Run the built-in changelog generator script to parse commits, diff stats, conventional commit prefixes, and affected areas:
 
 ```bash
-# Generate concise changelog (also automatically updates CHANGELOG.md if it exists):
-python .agents/skills/pr-changelog/scripts/generate_changelog.py --base <base> --format concise
+# Generate concise changelog (supports both local project and global plugin paths):
+python -c "import os, sys, subprocess; cand = next((p for p in ['.agents/skills/pr-changelog/scripts/generate_changelog.py', os.path.expanduser('~/.gemini/config/plugins/my-harness/skills/pr-changelog/scripts/generate_changelog.py'), os.path.expanduser('~/.agents/skills/pr-changelog/scripts/generate_changelog.py')] if os.path.exists(p)), None); sys.exit(subprocess.run([sys.executable, cand] + sys.argv[1:]).returncode if cand else 1)" --base <base> --format concise
 
 # For existing GitHub PR:
-python .agents/skills/pr-changelog/scripts/generate_changelog.py --pr <pr-number> --format concise
+python -c "import os, sys, subprocess; cand = next((p for p in ['.agents/skills/pr-changelog/scripts/generate_changelog.py', os.path.expanduser('~/.gemini/config/plugins/my-harness/skills/pr-changelog/scripts/generate_changelog.py'), os.path.expanduser('~/.agents/skills/pr-changelog/scripts/generate_changelog.py')] if os.path.exists(p)), None); sys.exit(subprocess.run([sys.executable, cand] + sys.argv[1:]).returncode if cand else 1)" --pr <pr-number> --format concise
 ```
 
 ---

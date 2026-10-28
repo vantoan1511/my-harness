@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HarnessConfig",
+  "description": "Configuration schema for my-harness autonomous agent engineering harness",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI of the JSON schema"
+    },
+    "project_name": {
+      "type": "string",
+      "description": "The name of the target project or application"
+    },
+    "preset": {
+      "type": "string",
+      "description": "Configuration preset (e.g. universal, desktop-vue-rust)",
+      "default": "universal"
+    },
+    "git": {
+      "type": "object",
+      "properties": {
+        "protected_branches": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["main", "master"],
+          "description": "Branches that agents must never commit or implement directly on"
+        },
+        "enforce_branch_safety": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the pre-flight verification fails on protected branches"
+        }
+      },
+      "additionalProperties": false
+    },
+    "guardrails": {
+      "type": "object",
+      "properties": {
+        "reminders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of reminder rules injected during agent lifecycle hooks"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "banned_imports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "description": { "type": "string" },
+              "pattern": { "type": "string" },
+              "path_match": { "type": "array", "items": { "type": "string" } },
+              "path_exclude": { "type": "array", "items": { "type": "string" } },
+              "suggestion": { "type": "string" }
+            },
+            "required": ["pattern"],
+            "additionalProperties": false
+          }
+        },
+        "banned_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "description": { "type": "string" },
+              "pattern": { "type": "string" },
+              "file_extensions": { "type": "array", "items": { "type": "string" } },
+              "path_match": { "type": "array", "items": { "type": "string" } },
+              "path_exclude": { "type": "array", "items": { "type": "string" } },
+              "ignore_in_test_modules": { "type": "boolean", "default": false },
+              "css_blocks_only": { "type": "boolean", "default": false },
+              "suggestion": { "type": "string" }
+            },
+            "required": ["pattern"],
+            "additionalProperties": false
+          }
+        },
+        "vue_template_rules": {
+          "type": "object",
+          "properties": {
+            "banned_tags": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tag": { "type": "string" },
+                  "suggestion": { "type": "string" }
+                },
+                "required": ["tag"],
+                "additionalProperties": false
+              }
+            },
+            "banned_attributes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "attribute": { "type": "string" },
+                  "ignore_components": { "type": "array", "items": { "type": "string" } },
+                  "suggestion": { "type": "string" }
+                },
+                "required": ["attribute"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "commands": {
+      "type": "object",
+      "properties": {
+        "type_check": { "type": "string" },
+        "lint": { "type": "string" },
+        "test": { "type": "string" },
+        "build": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["project_name"],
+  "additionalProperties": true
+}

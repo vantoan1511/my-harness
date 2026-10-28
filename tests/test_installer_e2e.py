@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import shutil
 import subprocess
+import os
 import sys
 from pathlib import Path
 
@@ -40,10 +41,19 @@ class TestInstallerE2E(unittest.TestCase):
         # Isolate home directory to a temporary folder
         fake_home = Path(self.temp_dir) / "fake_home"
         fake_home.mkdir()
+        fake_gemini = fake_home / ".gemini" / "config"
+        fake_gemini.mkdir(parents=True)
+
+        env = {
+            **os.environ,
+            "GEMINI_CONFIG_DIR": str(fake_gemini),
+            "AGENTS_GLOBAL_DIR": str(fake_home / ".agents"),
+            "NO_PIP_INSTALL": "1"
+        }
 
         # Run harness init with target pointing to fake_home in global scope
         cmd = [sys.executable, str(self.repo_root / "harness.py"), "init", str(fake_home), "--scope", "global"]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         self.assertEqual(result.returncode, 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}")
 
         # Verify .agents created in fake_home
@@ -53,7 +63,7 @@ class TestInstallerE2E(unittest.TestCase):
 
         # Verify doctor passes on global directory
         doc_cmd = [sys.executable, str(self.repo_root / "harness.py"), "doctor", str(fake_home)]
-        doc_res = subprocess.run(doc_cmd, capture_output=True, text=True)
+        doc_res = subprocess.run(doc_cmd, capture_output=True, text=True, env=env)
         self.assertEqual(doc_res.returncode, 0)
         self.assertIn("Doctor check completed", doc_res.stdout)
 

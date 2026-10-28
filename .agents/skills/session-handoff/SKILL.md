@@ -17,9 +17,9 @@ This skill helps summarize the current session to hand off work cleanly to the n
    - The **Next Steps** (what needs to be done next).
    - Any **Open Issues** or important notes for the next session.
 2. If any of the above information is unclear, ask the user for clarification before generating the summary.
-3. Run the Python script to generate the handoff summary document. Replace the arguments with your actual findings:
+3. Run the Python script to generate the handoff summary document (supports both local project and global plugin paths):
    ```bash
-   python .agents/skills/session-handoff/scripts/summarize_handoff.py \
+   python -c "import os, sys, subprocess; cand = next((p for p in ['.agents/skills/session-handoff/scripts/summarize_handoff.py', os.path.expanduser('~/.gemini/config/plugins/my-harness/skills/session-handoff/scripts/summarize_handoff.py'), os.path.expanduser('~/.agents/skills/session-handoff/scripts/summarize_handoff.py')] if os.path.exists(p)), None); sys.exit(subprocess.run([sys.executable, cand] + sys.argv[1:]).returncode if cand else 1)" \
      --goal "<insert goal>" \
      --outcomes "<insert outcomes>" \
      --next-steps "<insert next steps>" \

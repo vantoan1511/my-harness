@@ -23,6 +23,18 @@ class TestHarnessFix(unittest.TestCase):
             self.assertEqual(info.global_skills, set())
             self.assertEqual(info.global_rules, set())
 
+    def test_detect_global_installation_honors_gemini_config_dir(self):
+        fake_config = Path(self.temp_dir) / "fake_gemini_config"
+        fake_plugin = fake_config / "plugins" / "my-harness"
+        (fake_plugin / "skills" / "custom").mkdir(parents=True)
+        (fake_plugin / "skills" / "custom" / "SKILL.md").write_text("custom", encoding="utf-8")
+
+        with patch.dict("os.environ", {"GEMINI_CONFIG_DIR": str(fake_config)}):
+            info = harness.detect_global_installation()
+            self.assertTrue(info.is_installed)
+            self.assertEqual(info.plugin_dir, fake_plugin)
+            self.assertIn("custom", info.global_skills)
+
     def test_detect_global_installation_plugin(self):
         mock_home = Path(self.temp_dir) / "home_with_plugin"
         plugin_dir = mock_home / ".gemini" / "config" / "plugins" / "my-harness"
