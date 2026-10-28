@@ -227,7 +227,14 @@ The output of `/specify` must always strictly adhere to the following Markdown h
 - **[Decision Area 1]**: [Explanation of decision]
 - **[Decision Area 2]**: [Explanation of decision]
 
-Next Step: Run /implement .agents/PRPs/plans/{name}.plan.md to begin test-driven implementation.
+> **Recommended Next Step (Clean Context & Low Effort)**:
+> 1. Open a **New Conversation** in Antigravity Desktop.
+> 2. Switch Model Effort to **Medium** (or **Low** for small scoped tasks).
+> 3. Copy & paste the prompt below to run `/implement`:
+> ```text
+> /implement @.agents/PRPs/plans/{name}.plan.md
+> ```
+> Starting execution in a fresh session eliminates planning clutter, prevents context rot, and reduces LLM response latency.
 ```
 
 > [!IMPORTANT]
