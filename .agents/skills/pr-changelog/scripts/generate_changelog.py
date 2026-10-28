@@ -385,7 +385,8 @@ def insert_into_changelog(existing_content: str, new_entries: str) -> str:
     if match_unreleased:
         header_end = match_unreleased.end()
         after_header = existing_content[header_end:]
-        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_header.lstrip('\r\n')}"
+        after_cleaned = after_header.lstrip('\r\n')
+        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_cleaned}"
 
     # 2. Check for latest version heading: ## [x.y.z] or ## x.y.z
     version_pattern = re.compile(r"^(##\s+\[?[0-9]+\.[0-9]+(?:\.[0-9]+)?[^\]\n]*\]?.*)$", re.MULTILINE)
@@ -393,7 +394,8 @@ def insert_into_changelog(existing_content: str, new_entries: str) -> str:
     if match_version:
         header_end = match_version.end()
         after_header = existing_content[header_end:]
-        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_header.lstrip('\r\n')}"
+        after_cleaned = after_header.lstrip('\r\n')
+        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_cleaned}"
 
     # 3. Check for any top ## heading
     h2_pattern = re.compile(r"^(##\s+.*)$", re.MULTILINE)
@@ -401,7 +403,8 @@ def insert_into_changelog(existing_content: str, new_entries: str) -> str:
     if match_h2:
         header_end = match_h2.end()
         after_header = existing_content[header_end:]
-        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_header.lstrip('\r\n')}"
+        after_cleaned = after_header.lstrip('\r\n')
+        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_cleaned}"
 
     # 4. If only # Header exists
     h1_pattern = re.compile(r"^(#\s+.*)$", re.MULTILINE)
@@ -409,7 +412,8 @@ def insert_into_changelog(existing_content: str, new_entries: str) -> str:
     if match_h1:
         header_end = match_h1.end()
         after_header = existing_content[header_end:]
-        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_header.lstrip('\r\n')}"
+        after_cleaned = after_header.lstrip('\r\n')
+        return f"{existing_content[:header_end]}\n\n{new_entries_cleaned}\n{after_cleaned}"
 
     # 5. Fallback: append
     return f"{existing_content.strip()}\n\n{new_entries_cleaned}\n"
