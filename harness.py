@@ -747,6 +747,84 @@ def cmd_list_packs(args):
             print(f"  - {COLOR_BOLD}{p.name}{COLOR_RESET}")
             print(f"    {COLOR_YELLOW}{desc}{COLOR_RESET}\n")
 
+def get_git_hooks_dir(repo_root: Path) -> Optional[Path]:
+    """Finds the git hooks directory for a repo root."""
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        return None
+    if git_dir.is_file():
+        # Submodule or gitdir file
+        try:
+            content = git_dir.read_text(encoding="utf-8").strip()
+            if content.startswith("gitdir:"):
+                actual_git_dir = (repo_root / content[len("gitdir:"):].strip()).resolve()
+                return actual_git_dir / "hooks"
+        except Exception:
+            return None
+    return git_dir / "hooks"
+
+def is_git_hook_installed(repo_root: Path) -> bool:
+    """Checks whether the post-merge auto-update hook is installed in repo_root."""
+    hooks_dir = get_git_hooks_dir(repo_root)
+    if not hooks_dir or not hooks_dir.exists():
+        return False
+    hook_file = hooks_dir / "post-merge"
+    if not hook_file.exists():
+        return False
+    try:
+        content = hook_file.read_text(encoding="utf-8")
+        return "harness.py" in content and "update --force" in content
+    except Exception:
+        return False
+
+def install_git_hooks(repo_root: Path) -> bool:
+    """Installs post-merge auto-update hook into .git/hooks/post-merge."""
+    hooks_dir = get_git_hooks_dir(repo_root)
+    if not hooks_dir:
+        return False
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    hook_file = hooks_dir / "post-merge"
+
+    hook_content = (
+        "#!/bin/sh\n"
+        "# my-harness git post-merge auto-update hook\n"
+        "# Automatically synchronizes global Antigravity plugin after pull or merge\n"
+        "if command -v python3 >/dev/null 2>&1; then\n"
+        '    PYTHON_BIN="python3"\n'
+        "elif command -v python >/dev/null 2>&1; then\n"
+        '    PYTHON_BIN="python"\n'
+        "else\n"
+        "    exit 0\n"
+        "fi\n\n"
+        'REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"\n'
+        'if [ -f "$REPO_DIR/harness.py" ]; then\n'
+        '    "$PYTHON_BIN" "$REPO_DIR/harness.py" update --force >/dev/null 2>&1 &\n'
+        "fi\n"
+    )
+
+    try:
+        hook_file.write_text(hook_content, encoding="utf-8")
+        # Ensure executable permission on POSIX systems
+        try:
+            mode = hook_file.stat().st_mode
+            hook_file.chmod(mode | 0o755)
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+def cmd_install_hooks(args) -> int:
+    target_dir = Path(getattr(args, "target", ".") or ".").resolve()
+    print(f"{COLOR_CYAN}==> Installing git hooks in: {target_dir}...{COLOR_RESET}")
+    success = install_git_hooks(target_dir)
+    if success:
+        print(f"{COLOR_GREEN}[PASS] Installed git post-merge auto-update hook (.git/hooks/post-merge){COLOR_RESET}")
+        return 0
+    else:
+        print(f"{COLOR_RED}[FAIL] Could not install git hooks (is {target_dir} a git repository?){COLOR_RESET}")
+        return 1
+
 def cmd_doctor(args):
     target_dir = Path(args.target).resolve()
     target_agents = target_dir / ".agents"
@@ -792,11 +870,16 @@ def cmd_doctor(args):
         else:
             print(f"{COLOR_RED}[FAIL]{COLOR_RESET} Missing script: .agents/scripts/{s}")
 
-    # 4. Branch check
+    # 4. Branch & Git Hooks check
     try:
         res = subprocess.run(["git", "branch", "--show-current"], cwd=target_dir, capture_output=True, text=True)
         branch = res.stdout.strip()
         print(f"{COLOR_GREEN}[PASS]{COLOR_RESET} Git branch: {branch or 'Detached / No Branch'}")
+
+        if is_git_hook_installed(target_dir):
+            print(f"{COLOR_GREEN}[PASS]{COLOR_RESET} Git post-merge auto-update hook active")
+        else:
+            print(f"{COLOR_YELLOW}[INFO]{COLOR_RESET} Git post-merge auto-update hook not installed. Run 'harness install-hooks' to auto-sync on pull/merge.")
     except Exception:
         print(f"{COLOR_YELLOW}[WARN]{COLOR_RESET} Git repository not initialized or git not in PATH")
 
@@ -1044,6 +1127,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync = subparsers.add_parser("sync", help="Update core harness scripts and skills in target project")
     p_sync.add_argument("target", nargs="?", default=".", help="Target project directory")
 
+    # install-hooks
+    p_hooks = subparsers.add_parser("install-hooks", help="Install git post-merge auto-update hook in target repository")
+    p_hooks.add_argument("target", nargs="?", default=".", help="Target git repository directory (default: current directory)")
+
     # update
     p_update = subparsers.add_parser("update", help="Update my-harness plugin and global CLI from git upstream")
     p_update.add_argument("target", nargs="?", default=".", help="Target project directory if syncing project")
@@ -1077,6 +1164,8 @@ def main():
         cmd_verify(args)
     elif args.subcommand == "sync":
         cmd_sync(args)
+    elif args.subcommand == "install-hooks":
+        sys.exit(cmd_install_hooks(args))
     elif args.subcommand == "update":
         sys.exit(cmd_update(args))
 
