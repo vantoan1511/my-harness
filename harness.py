@@ -365,6 +365,34 @@ def copy_tree_merge(
             elif item.suffix in ('.py', '.json', '.md'):
                 shutil.copy2(item, target)
 
+def resolve_plugin_version(harness_root: Path) -> str:
+    """Computes dynamic semver string `0.1.<commit_count>+<short_sha>` from git history, falling back to VERSION."""
+    try:
+        cnt_res = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=harness_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        sha_res = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            cwd=harness_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        count = cnt_res.stdout.strip()
+        short_sha = sha_res.stdout.strip()
+        if count.isdigit() and short_sha:
+            base_parts = VERSION.split(".")
+            major_minor = ".".join(base_parts[:2]) if len(base_parts) >= 2 else "0.1"
+            return f"{major_minor}.{count}+{short_sha}"
+    except Exception:
+        pass
+    return VERSION
+
+
 def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack: Optional[str] = None) -> PluginDeploymentResult:
     """Packages and deploys my-harness as an Antigravity plugin into target_plugin_dir."""
     errors = []
@@ -377,7 +405,7 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
         plugin_manifest = {
             "name": "my-harness",
             "displayName": "Agent Engineering DevKit",
-            "version": VERSION,
+            "version": resolve_plugin_version(harness_root),
             "description": "Shift-left SDLC workflows: spec-first design, TDD loops, code review, and automated PR delivery.",
             "logo": "assets/logo.svg",
             "suggestedPrompts": [
