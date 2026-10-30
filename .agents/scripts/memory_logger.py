@@ -21,7 +21,13 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     except Exception:
         pass
 
-def get_repo_root() -> Path:
+def get_repo_root(payload: dict = None) -> Path:
+    if payload:
+        ws_paths = payload.get("workspacePaths")
+        if isinstance(ws_paths, list) and ws_paths:
+            cand = Path(ws_paths[0])
+            if cand.exists():
+                return cand
     try:
         res = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -112,6 +118,8 @@ def handle_hook(log_dir: Path):
             return
 
         payload = json.load(sys.stdin)
+        if log_dir is None:
+            log_dir = get_repo_root(payload) / ".agents" / "logs"
         transcript_path = payload.get("transcriptPath")
 
         if transcript_path and os.path.exists(transcript_path):
@@ -171,12 +179,11 @@ def handle_hook(log_dir: Path):
         print(json.dumps({}))
 
 def main():
-    root = get_repo_root()
-    log_dir = root / ".agents" / "logs"
-
     if len(sys.argv) > 1 and sys.argv[1] == "--hook":
-        handle_hook(log_dir)
+        handle_hook(None)
     elif len(sys.argv) > 1:
+        root = get_repo_root()
+        log_dir = root / ".agents" / "logs"
         text = " ".join(sys.argv[1:])
         logged = log_interaction(text, base_dir=log_dir)
         if logged:
@@ -184,6 +191,8 @@ def main():
         else:
             print("Interaction did not match memory or correction criteria.")
     else:
+        root = get_repo_root()
+        log_dir = root / ".agents" / "logs"
         print("Usage: python memory_logger.py \"your text here\"")
         print("       python memory_logger.py --hook (reads JSON from stdin)")
         print("Interactive mode (type 'exit' to quit):")

@@ -324,13 +324,38 @@ def detect_project_stack(target_dir: Path) -> dict:
 
     return stack
 
-def copy_tree_merge(src: Path, dst: Path, overwrite_configs: bool = False):
+def copy_tree_merge(
+    src: Path,
+    dst: Path,
+    overwrite_configs: bool = False,
+    exclude_dirs: Optional[Set[str]] = None,
+    exclude_files: Optional[Set[str]] = None,
+    exclude_suffixes: Optional[Set[str]] = None,
+):
     """Recursively copies src to dst, merging without overwriting non-empty existing dirs."""
+    if exclude_dirs is None:
+        exclude_dirs = {"__pycache__", ".pytest_cache"}
+    if exclude_files is None:
+        exclude_files = set()
+    if exclude_suffixes is None:
+        exclude_suffixes = {".pyc", ".pyo"}
+
     dst.mkdir(parents=True, exist_ok=True)
     for item in src.iterdir():
+        if item.is_dir() and item.name in exclude_dirs:
+            continue
+        if item.is_file() and (item.name in exclude_files or item.suffix in exclude_suffixes):
+            continue
         target = dst / item.name
         if item.is_dir():
-            copy_tree_merge(item, target, overwrite_configs=overwrite_configs)
+            copy_tree_merge(
+                item,
+                target,
+                overwrite_configs=overwrite_configs,
+                exclude_dirs=exclude_dirs,
+                exclude_files=exclude_files,
+                exclude_suffixes=exclude_suffixes,
+            )
         else:
             if not target.exists():
                 shutil.copy2(item, target)
@@ -392,9 +417,26 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
 
     # 4. Skills
     skills_copied = 0
+    plugin_exclude_dirs = {"__pycache__", ".pytest_cache", "tests", "evals", "agents"}
+    plugin_exclude_files = {"openai.yaml", ".update_check.json"}
+    plugin_exclude_suffixes = {".pyc", ".pyo"}
     try:
         plugin_skills_dir = target_plugin_dir / "skills"
-        copy_tree_merge(template_agents / "skills", plugin_skills_dir)
+        if plugin_skills_dir.exists():
+            # Clean any stale excluded directories/files from prior installations
+            for p in list(plugin_skills_dir.rglob("*")):
+                if p.exists():
+                    if p.is_dir() and p.name in plugin_exclude_dirs:
+                        shutil.rmtree(p, ignore_errors=True)
+                    elif p.is_file() and (p.name in plugin_exclude_files or p.suffix in plugin_exclude_suffixes):
+                        p.unlink(missing_ok=True)
+        copy_tree_merge(
+            template_agents / "skills",
+            plugin_skills_dir,
+            exclude_dirs=plugin_exclude_dirs,
+            exclude_files=plugin_exclude_files,
+            exclude_suffixes=plugin_exclude_suffixes,
+        )
         skills_copied = len([s for s in plugin_skills_dir.iterdir() if s.is_dir()])
     except Exception as e:
         errors.append(f"Failed to copy skills: {e}")
@@ -418,7 +460,13 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
         if pack:
             pack_dir = harness_root / "packs" / pack
             if (pack_dir / "skills").exists():
-                copy_tree_merge(pack_dir / "skills", target_plugin_dir / "skills")
+                copy_tree_merge(
+                    pack_dir / "skills",
+                    target_plugin_dir / "skills",
+                    exclude_dirs=plugin_exclude_dirs,
+                    exclude_files=plugin_exclude_files,
+                    exclude_suffixes=plugin_exclude_suffixes,
+                )
             if (pack_dir / "rules").exists():
                 for pr_path in (pack_dir / "rules").glob("*.md"):
                     rule_parts.append(pr_path.read_text(encoding="utf-8").strip())
@@ -430,18 +478,23 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
 
     # 6. Portable Scripts
     try:
+        scripts_target_dir = target_plugin_dir / "scripts"
+        scripts_target_dir.mkdir(parents=True, exist_ok=True)
         scripts_src = harness_root / "scripts"
         if scripts_src.exists():
-            scripts_target_dir = target_plugin_dir / "scripts"
-            scripts_target_dir.mkdir(parents=True, exist_ok=True)
             for s_file in scripts_src.glob("*.py"):
                 shutil.copy2(s_file, scripts_target_dir / s_file.name)
+        for helper_script in ("shift_left_hook.py", "memory_logger.py"):
+            helper_src = template_agents / "scripts" / helper_script
+            if helper_src.exists():
+                shutil.copy2(helper_src, scripts_target_dir / helper_script)
     except Exception as e:
         errors.append(f"Failed to copy portable scripts: {e}")
 
-    # Remove workspace-dependent hooks if present
-    if (target_plugin_dir / "hooks.json").exists():
-        (target_plugin_dir / "hooks.json").unlink()
+    # Remove workspace-dependent hooks or stale cache files if present in plugin root
+    for stale_file in ("hooks.json", ".update_check.json"):
+        if (target_plugin_dir / stale_file).exists():
+            (target_plugin_dir / stale_file).unlink()
 
     return PluginDeploymentResult(
         plugin_dir=target_plugin_dir,
@@ -963,7 +1016,7 @@ def cmd_update(args) -> int:
     print(f"{COLOR_CYAN}==> Checking for my-harness updates (branch: {branch})...{COLOR_RESET}")
 
     check_res = check_for_updates(harness_root, branch=branch)
-    cache_file = get_global_plugin_dir() / ".update_check.json"
+    cache_file = get_global_agents_dir() / ".update_check.json"
     save_update_check_state(cache_file, {
         "last_check_timestamp": time.time(),
         "has_update": check_res.has_update,

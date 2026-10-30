@@ -235,7 +235,7 @@ The goal is believable human writing, not maximum imperfection.
 
 ## Related skills
 
-For social chat, flirting, dating, teasing, or interpersonal messaging, combine this skill with `.agents/skills/social-conversation/SKILL.md`.
+For social chat, flirting, dating, teasing, or interpersonal messaging, combine this skill with [`social-conversation`](../social-conversation/SKILL.md).
 
 `natural-human-writing` controls how the message sounds.
 `social-conversation` controls conversational behavior and calibration.

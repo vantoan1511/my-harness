@@ -43,7 +43,13 @@ DEFAULT_REMINDERS = [
     "4. Branch Safety: Never commit directly to main/master."
 ]
 
-def get_repo_root() -> Path:
+def get_repo_root(payload: dict = None) -> Path:
+    if payload:
+        ws_paths = payload.get("workspacePaths")
+        if isinstance(ws_paths, list) and ws_paths:
+            cand = Path(ws_paths[0])
+            if cand.exists():
+                return cand
     try:
         res = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -102,7 +108,7 @@ def main():
         is_dev_request = any(re.search(pat, latest_user_request, re.IGNORECASE) for pat in SHIFT_LEFT_KEYWORDS)
 
         if is_dev_request:
-            root = get_repo_root()
+            root = get_repo_root(payload)
             config = load_config(root)
             reminders = config.get("guardrails", {}).get("reminders", DEFAULT_REMINDERS)
             reminder_text = "[Shift-Left Quality Guardrail]\n" + "\n".join(reminders)

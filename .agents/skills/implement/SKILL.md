@@ -109,7 +109,7 @@ For each task in **Step-by-Step Tasks**:
 5. **Run Shift-Left Micro-Validation Immediately** — After EVERY file change:
    ```bash
    # 1. Fast architectural & static pre-flight (< 0.5s)
-   python .agents/scripts/verify_shift_left.py --changed
+   python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--changed']) if os.path.exists(p) else 0)"
 
    # 2. Type check & fast task test
    [MICRO_VALIDATE command from task, or configured test/type-check command]
@@ -137,7 +137,7 @@ Run the comprehensive validation suite. Because shift-left micro-validation ran 
 ### Level 0: Shift-Left Pre-Flight Verification
 
 ```bash
-python .agents/scripts/verify_shift_left.py --changed
+python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--changed']) if os.path.exists(p) else 0)"
 ```
 Zero architectural violations, zero banned imports, zero raw controls or style violations.
 
@@ -145,7 +145,7 @@ Zero architectural violations, zero banned imports, zero raw controls or style v
 
 ```bash
 # Type checking & linting configured for project
-python .agents/scripts/verify_shift_left.py --lint --type-check
+python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--lint', '--type-check']) if os.path.exists(p) else 0)"
 # Or native commands: npm run type-check && npm run lint / cargo clippy / ruff check / go vet
 ```
 
@@ -157,7 +157,7 @@ Verify all tests pass without regressions:
 
 ```bash
 # Run project test suite
-python .agents/scripts/verify_shift_left.py --test
+python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--test']) if os.path.exists(p) else 0)"
 # Or native commands: npm test / cargo test / pytest / go test ./...
 ```
 - Ensure test coverage exists for every new function
@@ -192,67 +192,7 @@ Run through edge cases from the plan's Test-Driven Strategy checklist.
 mkdir -p .agents/PRPs/reports
 ```
 
-Write report to `.agents/PRPs/reports/{plan-name}-report.md`:
-
-```markdown
-# Implementation Report: [Feature Name]
-
-## Summary
-[What was implemented]
-
-## Assessment vs Reality
-
-| Metric | Predicted (Plan) | Actual |
-|---|---|---|
-| Complexity | [from plan] | [actual] |
-| Confidence | [from plan] | [actual] |
-| Files Changed | [from plan] | [actual count] |
-
-## Tasks Completed
-
-| # | Task | Status | Notes |
-|---|---|---|---|
-| 1 | [task name] | [done] Complete | |
-| 2 | [task name] | [done] Complete | Deviated — [reason] |
-
-## Validation Results
-
-| Level | Status | Notes |
-|---|---|---|
-| Pre-Flight Scanner | [done] Pass | Zero violations |
-| Static Analysis | [done] Pass | |
-| Unit Tests | [done] Pass | N tests written |
-| Build | [done] Pass | |
-| Integration | [done] Pass | or N/A |
-| Edge Cases | [done] Pass | |
-
-## Files Changed
-
-| File | Action | Lines |
-|---|---|---|
-| `path/to/file` | CREATED | +N |
-| `path/to/file` | UPDATED | +N / -M |
-
-## Deviations from Plan
-[List any deviations with WHAT and WHY, or "None"]
-
-## Issues Encountered
-[List any problems and how they were resolved, or "None"]
-
-## Tests Written
-
-| Test File | Tests | Coverage |
-|---|---|---|
-| `path/to/test` | N tests | [area covered] |
-
-## Knowledge Base Updates (Self-Improving)
-[List any new gotchas, architectural decisions, or recipes contributed to `.agents/references/`, or "None"]
-
-## Next Steps
-- [ ] Review PR: [PR URL or #<number>]
-- [ ] Code review via `/code-review <number>`
-- [ ] Merge PR when approved
-```
+Write report to `.agents/PRPs/reports/{plan-name}-report.md` following the template in [`resources/report-template.md`](./resources/report-template.md) (including Summary, Assessment vs Reality, Tasks Completed, Validation Results, Files Changed, Deviations, Tests Written, and Next Steps).
 
 ### Update PRD (if applicable)
 

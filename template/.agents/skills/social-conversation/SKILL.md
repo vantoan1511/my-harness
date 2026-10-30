@@ -72,7 +72,7 @@ If the user asks “reply sao?”, “nhắn gì?”, or equivalent:
 
 ## Relationship with natural-human-writing
 
-Use `.agents/skills/fb-comment-style/SKILL.md` for the writing surface: phrasing, rhythm, punctuation, slang, and degree of polish.
+Use [`natural-human-writing`](../natural-human-writing/SKILL.md) (or [`fb-comment-style`](../fb-comment-style/SKILL.md)) for the writing surface: phrasing, rhythm, punctuation, slang, and degree of polish.
 
 Use this skill for conversational behavior: energy matching, flirting calibration, teasing, reciprocity, boundaries, and interpreting context.
 
