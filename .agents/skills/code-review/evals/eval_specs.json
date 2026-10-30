@@ -1,14 +1,15 @@
 [
   {
     "id": "eval_cross_platform_safety",
-    "description": "Ensure skill does not contain bash-specific constructs incompatible with Windows PowerShell",
+    "description": "Ensure skill does not contain bash-specific or mixed-shell constructs incompatible across Windows PowerShell and POSIX shells",
     "target_file": "SKILL.md",
     "prohibited_patterns": [
       "2>/dev/null",
+      "2>\\$null\\s*\\|\\|",
       "while IFS= read",
       "\\\\\\s*\\n\\s*-[fF]"
     ],
-    "explanation": "Bash-specific redirections and multi-line backslash continuations fail in PowerShell on Windows."
+    "explanation": "Bash-specific redirections, mixed PowerShell/Bash chaining (2>$null ||), and multi-line backslash continuations fail across shells."
   },
   {
     "id": "eval_workspace_safety_no_destructive_checkout",
@@ -36,25 +37,38 @@
   },
   {
     "id": "eval_adaptive_reading_context_exhaustion",
-    "description": "Ensure skill advises against reading all changed files in full for large diffs",
+    "description": "Ensure skill advises against reading all changed files in full for large diffs and covers untracked files",
     "target_file": "SKILL.md",
     "required_patterns": [
       "Adaptive Scope",
-      "subagent"
+      "subagent",
+      "untracked"
     ],
     "prohibited_patterns": [
       "Read each changed file in full"
     ],
-    "explanation": "Reading all changed files in full causes context exhaustion and token throttling."
+    "explanation": "Reading all changed files in full causes context exhaustion and token throttling, while ignoring untracked files misses newly added code."
   },
   {
     "id": "eval_targeted_validation",
-    "description": "Ensure validation phase promotes targeted testing rather than blind full-suite runs",
+    "description": "Ensure validation phase promotes targeted testing on the PR head (worktree/CI) rather than blind runs on the wrong branch",
     "target_file": "SKILL.md",
     "required_patterns": [
       "Targeted",
-      "npx tsc --noEmit"
+      "npx tsc --noEmit",
+      "gh pr checks"
     ],
-    "explanation": "Targeted testing accelerates feedback and prevents long-running suite timeouts."
+    "explanation": "Targeted testing accelerates feedback and must run against the PR branch/worktree or inspect CI checks."
+  },
+  {
+    "id": "eval_pr_metadata_and_inline_comment_schema",
+    "description": "Ensure PR metadata fetches draft/state/url fields and batch inline comments specify valid payload schema and cleanup",
+    "target_file": "SKILL.md",
+    "required_patterns": [
+      "isDraft",
+      "\"comments\"\\s*:",
+      "--input"
+    ],
+    "explanation": "Draft PR detection requires isDraft in gh pr view, and GitHub review API requires a JSON object with a comments array."
   }
 ]

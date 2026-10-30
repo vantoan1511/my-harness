@@ -24,26 +24,28 @@ Fast, shift-left quality and security audit of uncommitted working tree changes.
 
 ### Phase 1 — GATHER & PRE-FLIGHT
 
-1. Inspect changed files & diff overview:
+1. Inspect changed files (modified, staged, and untracked) & diff overview:
    ```bash
    git status --short
    git diff --stat HEAD
    ```
 
-2. Run Shift-Left Pre-Flight Scanner (cross-platform compatible):
+2. Run Shift-Left Pre-Flight Scanner (cross-platform PowerShell & Bash safe):
    ```bash
-   python -m scripts.verify_shift_left --changed 2>$null || python -c "import os, subprocess; p=os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); subprocess.run(['python', p, '--changed']) if os.path.exists(p) else None"
+   python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--changed']) if os.path.exists(p) else 0)"
    ```
 
 3. Early termination:
-   - If no changed files: Stop and inform user: *"Nothing to review."*
-   - If shift-left scanner detects blocker violations (secrets, debugger leaks, merge conflict markers): Treat as **CRITICAL/HIGH** blockers immediately.
+   - If no modified, staged, or untracked files: Stop and inform user: *"Nothing to review."*
+   - If shift-left scanner detects blocker violations (secrets, debugger leaks, merge conflict markers, banned imports/patterns): Treat as **CRITICAL/HIGH** blockers immediately.
 
 ### Phase 2 — ADAPTIVE SCOPE REVIEW
 
 Avoid reading every file in its entirety to prevent context exhaustion and rate limits:
 
-1. **Diff-First Inspection**: Read `git diff HEAD` to examine changed blocks and immediate context.
+1. **Diff-First & Untracked Inspection**:
+   - Read `git diff HEAD` to examine changed blocks and immediate context.
+   - Read any newly created **untracked** source files (`??` in `git status --short`, excluding ignored build/vendor directories) since `git diff HEAD` does not include untracked files.
 2. **Context Expansion**: Only read full files or expanded ranges ($\pm 30$ lines) for:
    - Core domain models, architecture boundaries, security/auth layers.
    - Complex refactorings or public API signatures.
@@ -99,7 +101,7 @@ Comprehensive GitHub PR review with branch isolation, targeted testing, and non-
    # Branch input:
    gh pr list --head <branch> --json number,title
    # View PR summary:
-   gh pr view <NUMBER> --json number,title,body,author,baseRefName,headRefName,changedFiles,additions,deletions
+   gh pr view <NUMBER> --json number,title,body,author,state,isDraft,url,baseRefName,headRefName,changedFiles,additions,deletions
    ```
 
 2. Inspect PR stats and changed files list:
@@ -151,7 +153,15 @@ Severities:
 
 ### Phase 4 — IMPACTED / TARGETED VALIDATION
 
-Avoid running unconstrained full-repository test suites blindly. Execute fast checks first, followed by targeted tests covering modified paths:
+> [!IMPORTANT]
+> **Branch Alignment for Validation**: Only execute local type-checks, linters, or tests if the active directory actually points to the PR code (either `git branch --show-current` matches `<headRefName>` or you are running inside `.agents/worktree-pr-<NUMBER>`). Otherwise, inspect remote CI checks via `gh pr checks <NUMBER>` or create the isolated worktree from Phase 2.2 before running local validation.
+
+1. Check remote CI status first (when available):
+   ```bash
+   gh pr checks <NUMBER>
+   ```
+
+2. Avoid running unconstrained full-repository test suites blindly. When validating locally (on `<headRefName>` or inside `.agents/worktree-pr-<NUMBER>`), execute fast checks first, followed by targeted tests covering modified paths:
 
 **Node.js / TypeScript**:
 ```bash
@@ -251,9 +261,24 @@ gh pr review <NUMBER> --approve --body "<summary_content>"
 gh pr review <NUMBER> --request-changes --body "<required_fixes>"
 ```
 
-For batch inline comments, save payload to a temporary JSON file and submit via GitHub API (PowerShell & Bash safe):
+For batch inline comments, write a temporary JSON payload file matching the GitHub Pull Request Review API object schema, submit via `--input`, and immediately delete the temporary file afterward (PowerShell & Bash safe):
+```json
+{
+  "body": "Automated Code Review",
+  "event": "COMMENT",
+  "comments": [
+    {
+      "path": "path/to/file.py",
+      "line": 42,
+      "side": "RIGHT",
+      "body": "**[HIGH]** Issue description and suggested fix."
+    }
+  ]
+}
+```
 ```bash
-gh api "repos/{owner}/{repo}/pulls/<NUMBER>/reviews" -f event="COMMENT" -f body="Automated Code Review" --input comments.json
+gh api "repos/{owner}/{repo}/pulls/<NUMBER>/reviews" --method POST --input .agents/reviews/pr-<NUMBER>-comments.json
+python -c "import os; p='.agents/reviews/pr-<NUMBER>-comments.json'; os.remove(p) if os.path.exists(p) else None"
 ```
 
 ### Phase 8 — SUMMARY OUTPUT
