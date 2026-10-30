@@ -484,17 +484,45 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
         if scripts_src.exists():
             for s_file in scripts_src.glob("*.py"):
                 shutil.copy2(s_file, scripts_target_dir / s_file.name)
-        for helper_script in ("shift_left_hook.py", "memory_logger.py"):
+        for helper_script in ("shift_left_hook.py", "memory_logger.py", "auto_update_hook.py"):
             helper_src = template_agents / "scripts" / helper_script
             if helper_src.exists():
                 shutil.copy2(helper_src, scripts_target_dir / helper_script)
     except Exception as e:
         errors.append(f"Failed to copy portable scripts: {e}")
 
-    # Remove workspace-dependent hooks or stale cache files if present in plugin root
-    for stale_file in ("hooks.json", ".update_check.json"):
-        if (target_plugin_dir / stale_file).exists():
-            (target_plugin_dir / stale_file).unlink()
+    # 7. Plugin-native SessionStart auto-update hook (hooks.json)
+    try:
+        plugin_hooks = {
+            "my-harness-auto-updater": {
+                "SessionStart": [
+                    {
+                        "type": "command",
+                        "command": "python ./scripts/auto_update_hook.py",
+                        "timeout": 5
+                    }
+                ]
+            }
+        }
+        (target_plugin_dir / "hooks.json").write_text(json.dumps(plugin_hooks, indent=2), encoding="utf-8")
+    except Exception as e:
+        errors.append(f"Failed to write plugin hooks.json: {e}")
+
+    # Remove stale cache file if present in plugin root
+    if (target_plugin_dir / ".update_check.json").exists():
+        (target_plugin_dir / ".update_check.json").unlink()
+
+    # Record source_repo in global .update_check.json so background auto-updater can locate harness.py
+    cache_file = get_global_agents_dir() / ".update_check.json"
+    existing_state = {}
+    if cache_file.exists():
+        try:
+            existing_state = json.loads(cache_file.read_text(encoding="utf-8"))
+        except Exception:
+            existing_state = {}
+    existing_state["source_repo"] = str(harness_root)
+    existing_state.setdefault("last_check_timestamp", time.time())
+    save_update_check_state(cache_file, existing_state)
 
     return PluginDeploymentResult(
         plugin_dir=target_plugin_dir,
@@ -594,8 +622,15 @@ def save_update_check_state(cache_file: Path, state: dict):
     """Saves update check state to disk if parent exists."""
     try:
         if cache_file.parent.exists():
-            state["last_check_timestamp"] = state.get("last_check_timestamp", time.time())
-            cache_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            existing = {}
+            if cache_file.exists():
+                try:
+                    existing = json.loads(cache_file.read_text(encoding="utf-8"))
+                except Exception:
+                    existing = {}
+            merged = {**existing, **state}
+            merged["last_check_timestamp"] = state.get("last_check_timestamp", time.time())
+            cache_file.write_text(json.dumps(merged, indent=2), encoding="utf-8")
     except Exception:
         pass
 
@@ -1019,6 +1054,7 @@ def cmd_update(args) -> int:
     cache_file = get_global_agents_dir() / ".update_check.json"
     save_update_check_state(cache_file, {
         "last_check_timestamp": time.time(),
+        "source_repo": str(harness_root),
         "has_update": check_res.has_update,
         "current_commit": check_res.current_commit,
         "remote_commit": check_res.remote_commit,
@@ -1035,6 +1071,7 @@ def cmd_update(args) -> int:
     if check_only:
         return 0
 
+    pulled_new_commits = False
     # If git repo and has updates, pull unless local working tree is dirty
     if check_res.is_git_repo and check_res.has_update and not force:
         try:
@@ -1045,6 +1082,7 @@ def cmd_update(args) -> int:
                 print(f"{COLOR_CYAN}==> Pulling latest changes from origin/{branch}...{COLOR_RESET}")
                 pull_res = subprocess.run(["git", "pull", "--ff-only", "origin", branch], cwd=harness_root, capture_output=True, text=True)
                 if pull_res.returncode == 0:
+                    pulled_new_commits = True
                     print(f"{COLOR_GREEN}[PASS] Successfully pulled latest commits.{COLOR_RESET}")
                 else:
                     print(f"{COLOR_YELLOW}[WARN] git pull failed ({pull_res.stderr.strip()}). Proceeding with current files.{COLOR_RESET}")
@@ -1055,6 +1093,16 @@ def cmd_update(args) -> int:
     harness_plugin_dir = get_global_plugin_dir()
     print(f"\n{COLOR_CYAN}==> Updating global Antigravity plugin ({harness_plugin_dir})...{COLOR_RESET}")
     deploy_res = deploy_antigravity_plugin(harness_root, harness_plugin_dir)
+
+    if pulled_new_commits and not deploy_res.errors:
+        save_update_check_state(cache_file, {
+            "last_check_timestamp": time.time(),
+            "source_repo": str(harness_root),
+            "has_update": False,
+            "just_updated": True,
+            "updated_to_commit": check_res.remote_commit or check_res.current_commit,
+            "behind_count": 0
+        })
 
     if deploy_res.errors:
         print(f"{COLOR_RED}[FAIL] Plugin deployment encountered errors: {', '.join(deploy_res.errors)}{COLOR_RESET}")
