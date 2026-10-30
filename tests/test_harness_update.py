@@ -30,6 +30,7 @@ class TestHarnessUpdate(unittest.TestCase):
         self.assertTrue(manifest_file.exists())
         manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
         self.assertEqual(manifest["name"], "my-harness")
+        self.assertRegex(manifest["version"], r"^0\.1\.\d+\+[0-9a-f]{7,}$")
 
         # Check rules/AGENTS.md
         rules_agents = mock_plugin_dir / "rules" / "AGENTS.md"
