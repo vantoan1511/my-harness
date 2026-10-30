@@ -65,6 +65,13 @@ class TestHarnessUpdate(unittest.TestCase):
         self.assertTrue((mock_plugin_dir / "skills" / "prd" / "resources" / "prd-template.md").exists())
         self.assertTrue((mock_plugin_dir / "skills" / "prp-plan" / "resources" / "plan-template.md").exists())
 
+        # Check SessionStart auto-update hook and script
+        self.assertTrue((mock_plugin_dir / "scripts" / "auto_update_hook.py").exists())
+        self.assertTrue((mock_plugin_dir / "hooks.json").exists())
+        hooks_cfg = json.loads((mock_plugin_dir / "hooks.json").read_text(encoding="utf-8"))
+        self.assertIn("my-harness-auto-updater", hooks_cfg)
+        self.assertIn("SessionStart", hooks_cfg["my-harness-auto-updater"])
+
     @patch("subprocess.run")
     def test_check_for_updates_detects_behind_commits(self, mock_run):
         # Mock git rev-parse HEAD, git rev-parse origin/main, git rev-list
@@ -185,6 +192,61 @@ class TestHarnessUpdate(unittest.TestCase):
             ret = harness.cmd_update(args)
             self.assertEqual(ret, 0)
             self.assertTrue((proj_dir / ".agents" / "scripts" / "verify_shift_left.py").exists())
+
+    def test_auto_update_hook_spawns_background_update_when_due(self):
+        import importlib.util
+        hook_script = self.harness_root / "template" / ".agents" / "scripts" / "auto_update_hook.py"
+        self.assertTrue(hook_script.exists(), "auto_update_hook.py must exist in template/.agents/scripts/")
+
+        spec = importlib.util.spec_from_file_location("auto_update_hook", str(hook_script))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        cache_file = Path(self.temp_dir) / ".update_check.json"
+        fake_repo = Path(self.temp_dir) / "fake_repo"
+        fake_repo.mkdir()
+        (fake_repo / "harness.py").write_text("# fake", encoding="utf-8")
+
+        # Expired timestamp -> should spawn Popen and return {}
+        cache_file.write_text(json.dumps({
+            "last_check_timestamp": 0,
+            "source_repo": str(fake_repo),
+            "just_updated": False
+        }), encoding="utf-8")
+
+        with patch("subprocess.Popen") as mock_popen:
+            result = mod.run_session_start_check(cache_file, interval_hours=6)
+            self.assertEqual(result, {})
+            self.assertTrue(mock_popen.called, "Popen should be called when update check is due")
+
+    def test_auto_update_hook_injects_notification_after_background_update(self):
+        import importlib.util
+        import time
+        hook_script = self.harness_root / "template" / ".agents" / "scripts" / "auto_update_hook.py"
+        self.assertTrue(hook_script.exists(), "auto_update_hook.py must exist in template/.agents/scripts/")
+
+        spec = importlib.util.spec_from_file_location("auto_update_hook", str(hook_script))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        cache_file = Path(self.temp_dir) / ".update_check.json"
+        cache_file.write_text(json.dumps({
+            "last_check_timestamp": time.time(),
+            "just_updated": True,
+            "updated_to_commit": "abc1234",
+            "behind_count": 2
+        }), encoding="utf-8")
+
+        with patch("subprocess.Popen") as mock_popen:
+            result = mod.run_session_start_check(cache_file, interval_hours=6)
+            self.assertFalse(mock_popen.called, "Popen should NOT be called when cache is fresh")
+            self.assertIn("injectSteps", result)
+            msg = result["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("abc1234", msg)
+
+        # Verify just_updated flag was cleared so it only notifies once
+        updated_cache = json.loads(cache_file.read_text(encoding="utf-8"))
+        self.assertFalse(updated_cache.get("just_updated"))
 
 if __name__ == "__main__":
     unittest.main()

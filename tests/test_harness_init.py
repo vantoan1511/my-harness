@@ -172,8 +172,11 @@ class TestHarnessInitScope(unittest.TestCase):
             loose_rules = [f.name for f in (plugin_dir / "rules").glob("*.md") if f.name != "AGENTS.md"]
             self.assertEqual(loose_rules, [])
 
-            # 4. Decoupled hooks.json
-            self.assertFalse((plugin_dir / "hooks.json").exists())
+            # 4. Plugin-native hooks.json (uses ./scripts/auto_update_hook.py, not workspace .agents/)
+            self.assertTrue((plugin_dir / "hooks.json").exists())
+            hooks_data = json.loads((plugin_dir / "hooks.json").read_text(encoding="utf-8"))
+            self.assertIn("my-harness-auto-updater", hooks_data)
+            self.assertNotIn(".agents/scripts", (plugin_dir / "hooks.json").read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
     unittest.main()
