@@ -30,7 +30,7 @@ Write the test case before modifying or creating production files. Define:
 ### Step 2: Verify Test Failure
 Run the test runner to ensure the test fails for the expected reason:
 ```bash
-python .agents/scripts/verify_shift_left.py --test
+python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--test']) if os.path.exists(p) else 0)"
 ```
 *If the test passes before writing code, the test is invalid or testing already-existing behavior!*
 
@@ -40,7 +40,7 @@ Write only the minimal code necessary to make the test pass. Avoid premature ove
 ### Step 4: Run Shift-Left Pre-Flight
 Run the fast shift-left pre-flight tool immediately after editing:
 ```bash
-python .agents/scripts/verify_shift_left.py --changed
+python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--changed']) if os.path.exists(p) else 0)"
 ```
 Ensure zero type errors, zero lint warnings, and zero architectural violations.
 

@@ -202,7 +202,7 @@ The plan must:
    - `ACTION`: concrete edit description
    - `TEST_FIRST`: specific test file path, test name, input fixture, expected assertion
    - `IMPLEMENT`: minimal code instructions to make test pass
-   - `MICRO_VALIDATE`: fast check command (`npm test`, `pytest`, `cargo test`, `python .agents/scripts/verify_shift_left.py --changed`, etc.)
+   - `MICRO_VALIDATE`: fast check command (`npm test`, `pytest`, `cargo test`, or `verify_shift_left.py --changed` from `.agents/scripts/` or `~/.gemini/config/plugins/my-harness/scripts/`)
 4. Include the Level 0 Pre-Flight Scanner in validation commands.
 
 ---

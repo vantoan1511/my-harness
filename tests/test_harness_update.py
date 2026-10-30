@@ -45,6 +45,26 @@ class TestHarnessUpdate(unittest.TestCase):
         # Check assets
         self.assertTrue((mock_plugin_dir / "assets" / "logo.svg").exists())
 
+        # Check plugin cleanliness (no __pycache__, .pyc, tests/, evals/, openai.yaml, or .update_check.json inside plugin)
+        for p in mock_plugin_dir.rglob("*"):
+            self.assertNotEqual(p.name, "__pycache__", f"Found __pycache__ in plugin: {p}")
+            self.assertNotEqual(p.suffix, ".pyc", f"Found .pyc in plugin: {p}")
+            self.assertNotIn("tests", p.parts, f"Found tests/ dir in plugin: {p}")
+            self.assertNotIn("evals", p.parts, f"Found evals/ dir in plugin: {p}")
+            self.assertNotEqual(p.name, "openai.yaml", f"Found openai.yaml in plugin: {p}")
+        self.assertFalse((mock_plugin_dir / ".update_check.json").exists())
+
+        # Check portable scripts and cross-path rules/skills
+        self.assertTrue((mock_plugin_dir / "scripts" / "verify_shift_left.py").exists())
+        self.assertTrue((mock_plugin_dir / "scripts" / "shift_left_hook.py").exists())
+        self.assertTrue((mock_plugin_dir / "scripts" / "memory_logger.py").exists())
+        self.assertIn("~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py", content)
+
+        # Check progressive disclosure resource templates for large skills
+        self.assertTrue((mock_plugin_dir / "skills" / "implement" / "resources" / "report-template.md").exists())
+        self.assertTrue((mock_plugin_dir / "skills" / "prd" / "resources" / "prd-template.md").exists())
+        self.assertTrue((mock_plugin_dir / "skills" / "prp-plan" / "resources" / "plan-template.md").exists())
+
     @patch("subprocess.run")
     def test_check_for_updates_detects_behind_commits(self, mock_run):
         # Mock git rev-parse HEAD, git rev-parse origin/main, git rev-list

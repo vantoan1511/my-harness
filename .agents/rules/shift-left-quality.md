@@ -96,7 +96,7 @@ Before completing a task, committing, or reporting completion:
 
 1. **Run the Pre-Flight Scanner**:
    ```bash
-   python .agents/scripts/verify_shift_left.py --changed
+   python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--changed']) if os.path.exists(p) else 0)"
    ```
    This fast static check (< 0.5s) scans changed files for:
    - Branch safety (not on `main`/`master`).

@@ -21,7 +21,7 @@ Then apply the natural-writing constraints from the skill.
 
 ## Social Conversation
 
-For casual social messaging, flirting, dating, teasing, banter, or interpersonal chat, also use `.agents/skills/social-conversation/SKILL.md`.
+For casual social messaging, flirting, dating, teasing, banter, or interpersonal chat, also use the `social-conversation` skill (`../social-conversation/SKILL.md`).
 
 Use `natural-human-writing` for the writing surface and `social-conversation` for conversational behavior/calibration.
 
