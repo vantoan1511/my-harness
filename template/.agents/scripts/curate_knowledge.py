@@ -10,6 +10,7 @@ verifying and updating the curated knowledge base in .agents/references/.
 import sys
 import os
 import re
+import argparse
 import subprocess
 from pathlib import Path
 
@@ -92,6 +93,93 @@ def extract_report_issues(base_dir: Path) -> list[dict]:
 
     return issues
 
+def extract_self_review_findings(base_dir: Path) -> list[dict]:
+    reports_dir = base_dir / "PRPs" / "reports"
+    if not reports_dir.exists():
+        return []
+
+    findings = []
+    for report_file in sorted(reports_dir.glob("*-report.md")):
+        try:
+            content = report_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        m_log = re.search(r"## Self-Review & Adaptation Log\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+        if not m_log:
+            continue
+
+        for line in m_log.group(1).splitlines():
+            line_str = line.strip()
+            if not line_str.startswith("|") or "---" in line_str or "Severity" in line_str:
+                continue
+            cols = [c.strip() for c in line_str.strip("|").split("|")]
+            if len(cols) < 5:
+                continue
+            sev = cols[1].upper()
+            if sev in ("[HIGH/MEDIUM/LOW]", "NONE", "") or sev not in ("CRITICAL", "HIGH", "MEDIUM"):
+                continue
+
+            findings.append({
+                "report": report_file.name,
+                "severity": sev,
+                "file_target": cols[2],
+                "issue": cols[3],
+                "adaptation": cols[4]
+            })
+    return findings
+
+def _ensure_readme_link(base_dir: Path):
+    readme_path = base_dir / "references" / "README.md"
+    if not readme_path.exists():
+        return
+    try:
+        content = readme_path.read_text(encoding="utf-8")
+        link_str = "[auto-curated-gotchas.md](file://gotchas/auto-curated-gotchas.md)"
+        if "auto-curated-gotchas.md" not in content:
+            updated = content.replace(
+                "## Catalog Index",
+                f"## Catalog Index\n\n- {link_str} — Auto-curated gotchas from self-reviews & reports."
+            )
+            readme_path.write_text(updated, encoding="utf-8")
+    except Exception:
+        pass
+
+def persist_curated_gotchas(base_dir: Path, findings: list[dict], issues: list[dict]) -> Path | None:
+    gotchas_dir = base_dir / "references" / "gotchas"
+    gotchas_dir.mkdir(parents=True, exist_ok=True)
+    out_file = gotchas_dir / "auto-curated-gotchas.md"
+
+    existing_content = out_file.read_text(encoding="utf-8") if out_file.exists() else ""
+    header = (
+        "# Auto-Curated Gotchas & Operational Traps\n\n"
+        "> Synthesized automatically by `curate_knowledge.py` from Phase 4.5 Self-Review logs and PRP reports.\n"
+    )
+    if not existing_content:
+        existing_content = header
+
+    new_entries = []
+    for f in findings:
+        title = f"### [{f['severity']}] {f['issue']} (Source: {f['report']})"
+        if title in existing_content:
+            continue
+        body = f"{title}\n- **Target**: {f['file_target']}\n- **Adaptation / Fix**: {f['adaptation']}\n"
+        new_entries.append(body)
+
+    for iss in issues:
+        title = f"### [DEVIATION] {iss['section']} in {iss['file']}"
+        if title in existing_content:
+            continue
+        body = f"{title}\n- **Insight**: {iss['text']}\n"
+        new_entries.append(body)
+
+    if new_entries:
+        existing_content = existing_content.rstrip() + "\n\n" + "\n".join(new_entries) + "\n"
+        out_file.write_text(existing_content, encoding="utf-8")
+
+    _ensure_readme_link(base_dir)
+    return out_file
+
 def verify_reference_links(base_dir: Path) -> list[str]:
     repo_root = base_dir.parent
     ref_dir = base_dir / "references"
@@ -115,6 +203,10 @@ def verify_reference_links(base_dir: Path) -> list[str]:
     return broken_links
 
 def main():
+    parser = argparse.ArgumentParser(description="Self-Improving Knowledge Curation Tool")
+    parser.add_argument("--persist", action="store_true", help="Persist findings and deviations into gotchas")
+    args = parser.parse_args()
+
     repo_root = get_repo_root()
     base_dir = repo_root / ".agents"
     print("==> Knowledge Base Curation Report")
@@ -140,6 +232,17 @@ def main():
     print(f"\nExtracted {len(report_issues)} deviation/issue insights from PRP reports:")
     for ri in report_issues[-5:]:
         print(f"  [{ri['file']} - {ri['section']}] {ri['text'][:120]}...")
+
+    # 4. Extract self-review findings
+    self_review_findings = extract_self_review_findings(base_dir)
+    print(f"\nExtracted {len(self_review_findings)} Phase 4.5 self-review finding(s):")
+    for f in self_review_findings[-5:]:
+        print(f"  [{f['severity']}] {f['file_target']} - {f['issue']}")
+
+    if args.persist:
+        out_file = persist_curated_gotchas(base_dir, self_review_findings, report_issues)
+        if out_file:
+            print(f"\n[PASS] Persisted curated gotchas to: {out_file}")
 
     print("\n==> Knowledge Base Status: Operational & Curated.")
 

@@ -18,21 +18,43 @@ class TestGitHooks(unittest.TestCase):
     def test_is_git_hook_installed_false_when_missing(self):
         self.assertFalse(harness.is_git_hook_installed(self.repo))
 
-    def test_install_git_hooks_creates_post_merge_hook(self):
+    def test_install_git_hooks_creates_post_merge_and_pre_commit_hooks(self):
         installed = harness.install_git_hooks(self.repo)
         self.assertTrue(installed)
         self.assertTrue(harness.is_git_hook_installed(self.repo))
 
-        hook_path = self.repo / ".git" / "hooks" / "post-merge"
-        self.assertTrue(hook_path.exists())
-        content = hook_path.read_text(encoding="utf-8")
-        self.assertIn('"$REPO_DIR/harness.py" update --force', content)
-        self.assertIn("#!/bin/sh", content)
+        # Check post-merge hook
+        pm_path = self.repo / ".git" / "hooks" / "post-merge"
+        self.assertTrue(pm_path.exists())
+        pm_content = pm_path.read_text(encoding="utf-8")
+        self.assertIn('"$REPO_DIR/harness.py" update --force', pm_content)
+        self.assertIn("#!/bin/sh", pm_content)
+
+        # Check pre-commit hook
+        pc_path = self.repo / ".git" / "hooks" / "pre-commit"
+        self.assertTrue(pc_path.exists())
+        pc_content = pc_path.read_text(encoding="utf-8")
+        self.assertIn("verify_shift_left.py", pc_content)
+        self.assertIn("--staged", pc_content)
+        self.assertIn("#!/bin/sh", pc_content)
+
+    def test_is_git_hook_installed_false_if_one_hook_missing(self):
+        harness.install_git_hooks(self.repo)
+        self.assertTrue(harness.is_git_hook_installed(self.repo))
+        # Remove pre-commit
+        (self.repo / ".git" / "hooks" / "pre-commit").unlink()
+        self.assertFalse(harness.is_git_hook_installed(self.repo))
 
     def test_install_git_hooks_idempotent(self):
         harness.install_git_hooks(self.repo)
         installed_again = harness.install_git_hooks(self.repo)
         self.assertTrue(installed_again)
+        self.assertTrue(harness.is_git_hook_installed(self.repo))
+
+    def test_cmd_init_installs_git_hooks_for_project_repo(self):
+        parser = harness.build_parser()
+        args = parser.parse_args(["init", str(self.repo)])
+        harness.cmd_init(args)
         self.assertTrue(harness.is_git_hook_installed(self.repo))
 
     def test_install_git_hooks_fails_gracefully_when_not_git_repo(self):

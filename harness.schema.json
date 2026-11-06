@@ -113,6 +113,19 @@
             }
           },
           "additionalProperties": false
+        },
+        "structural_rules": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "max_function_lines": { "type": "integer", "default": 50 },
+            "max_nesting_depth": { "type": "integer", "default": 4 },
+            "path_exclude": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

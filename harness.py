@@ -731,7 +731,11 @@ def cmd_init(args):
     if args.pack:
         install_pack(args.pack, target_dir)
 
-    # 5. Global CLI installation via pip if global scope
+    # 5. Git hooks installation (project scope only if .git exists)
+    if not is_global and get_git_hooks_dir(target_dir) is not None:
+        install_git_hooks(target_dir)
+
+    # 6. Global CLI installation via pip if global scope
     if is_global:
         if not os.environ.get("NO_PIP_INSTALL"):
             print(f"\n{COLOR_CYAN}==> Registering 'harness' CLI globally via pip...{COLOR_RESET}")
@@ -880,28 +884,33 @@ def get_git_hooks_dir(repo_root: Path) -> Optional[Path]:
     return git_dir / "hooks"
 
 def is_git_hook_installed(repo_root: Path) -> bool:
-    """Checks whether the post-merge auto-update hook is installed in repo_root."""
+    """Checks whether the pre-commit and post-merge hooks are installed in repo_root."""
     hooks_dir = get_git_hooks_dir(repo_root)
     if not hooks_dir or not hooks_dir.exists():
         return False
-    hook_file = hooks_dir / "post-merge"
-    if not hook_file.exists():
+    pm_file = hooks_dir / "post-merge"
+    pc_file = hooks_dir / "pre-commit"
+    if not pm_file.exists() or not pc_file.exists():
         return False
     try:
-        content = hook_file.read_text(encoding="utf-8")
-        return "harness.py" in content and "update --force" in content
+        pm_content = pm_file.read_text(encoding="utf-8")
+        pc_content = pc_file.read_text(encoding="utf-8")
+        pm_ok = "harness.py" in pm_content and "update --force" in pm_content
+        pc_ok = "verify_shift_left.py" in pc_content and "--staged" in pc_content
+        return pm_ok and pc_ok
     except Exception:
         return False
 
 def install_git_hooks(repo_root: Path) -> bool:
-    """Installs post-merge auto-update hook into .git/hooks/post-merge."""
+    """Installs post-merge and pre-commit hooks into .git/hooks."""
     hooks_dir = get_git_hooks_dir(repo_root)
     if not hooks_dir:
         return False
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    hook_file = hooks_dir / "post-merge"
+    pm_file = hooks_dir / "post-merge"
+    pc_file = hooks_dir / "pre-commit"
 
-    hook_content = (
+    pm_content = (
         "#!/bin/sh\n"
         "# my-harness git post-merge auto-update hook\n"
         "# Automatically synchronizes global Antigravity plugin after pull or merge\n"
@@ -918,14 +927,34 @@ def install_git_hooks(repo_root: Path) -> bool:
         "fi\n"
     )
 
+    pc_content = (
+        "#!/bin/sh\n"
+        "# my-harness git pre-commit shift-left enforcement hook\n"
+        "# Runs fast architectural and static verification on staged files\n"
+        "if command -v python3 >/dev/null 2>&1; then\n"
+        '    PYTHON_BIN="python3"\n'
+        "elif command -v python >/dev/null 2>&1; then\n"
+        '    PYTHON_BIN="python"\n'
+        "else\n"
+        "    exit 0\n"
+        "fi\n\n"
+        'REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"\n'
+        'SCANNER="$REPO_DIR/.agents/scripts/verify_shift_left.py"\n'
+        'if [ -f "$SCANNER" ]; then\n'
+        '    "$PYTHON_BIN" "$SCANNER" --staged\n'
+        "    exit $?\n"
+        "fi\n"
+        "exit 0\n"
+    )
+
     try:
-        hook_file.write_text(hook_content, encoding="utf-8")
-        # Ensure executable permission on POSIX systems
-        try:
-            mode = hook_file.stat().st_mode
-            hook_file.chmod(mode | 0o755)
-        except Exception:
-            pass
+        for f, content in [(pm_file, pm_content), (pc_file, pc_content)]:
+            f.write_text(content, encoding="utf-8")
+            try:
+                mode = f.stat().st_mode
+                f.chmod(mode | 0o755)
+            except Exception:
+                pass
         return True
     except Exception:
         return False
@@ -935,7 +964,7 @@ def cmd_install_hooks(args) -> int:
     print(f"{COLOR_CYAN}==> Installing git hooks in: {target_dir}...{COLOR_RESET}")
     success = install_git_hooks(target_dir)
     if success:
-        print(f"{COLOR_GREEN}[PASS] Installed git post-merge auto-update hook (.git/hooks/post-merge){COLOR_RESET}")
+        print(f"{COLOR_GREEN}[PASS] Installed git pre-commit and post-merge hooks (.git/hooks/){COLOR_RESET}")
         return 0
     else:
         print(f"{COLOR_RED}[FAIL] Could not install git hooks (is {target_dir} a git repository?){COLOR_RESET}")
