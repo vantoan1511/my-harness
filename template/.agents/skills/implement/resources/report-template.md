@@ -28,6 +28,13 @@
 | Build | [done] Pass | |
 | Integration | [done] Pass | or N/A |
 | Edge Cases | [done] Pass | |
+| Self-Review & Adapt | [done] Pass | N findings adapted |
+
+## Self-Review & Adaptation Log
+
+| # | Severity | File | Issue | Adaptation Applied | Status |
+|---|---|---|---|---|---|
+| 1 | [HIGH/MEDIUM/LOW] | `path/to/file` | [finding] | [fix applied or logged] | [done] Adapted / Logged |
 
 ## Files Changed
 
@@ -53,5 +60,5 @@
 
 ## Next Steps
 - [ ] Review PR: [PR URL or #<number>]
-- [ ] Code review via `/code-review <number>`
+- [ ] Automated review: Already completed via Phase 4.5 Self-Review & Adapt Loop
 - [ ] Merge PR when approved

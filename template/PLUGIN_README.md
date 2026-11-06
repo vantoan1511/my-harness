@@ -27,6 +27,7 @@ Whether working in TypeScript, Python, Rust, or Go, this plugin turns general AI
 - Reads the plan and executes changes step-by-step.
 - Enforces test-first (RED) and minimal implementation (GREEN).
 - Runs micro-validation after every single file edit (`python .agents/scripts/verify_shift_left.py --changed`).
+- Runs autonomous Critic Subagent review and adapts high/medium findings via bounded TDD micro-loops.
 - Automatically produces implementation reports and stages changes.
 
 ### 4. Test-Driven Development Gate (`/tdd-workflow`)

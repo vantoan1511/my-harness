@@ -184,6 +184,70 @@ Run through edge cases from the plan's Test-Driven Strategy checklist.
 
 ---
 
+## Phase 4.5 — REVIEW, SIMPLIFY & ADAPT (Self-Healing Loop)
+
+Run an autonomous, semantic self-review, simplification, and adaptation loop on the uncommitted working tree diff BEFORE generating reports or committing code.
+
+**Core Philosophy**: Mechanical validation (Phase 4) proves the code compiles and passes tests; semantic review checks architecture, security, design patterns, and simplicity. Reviewing in the same agent context suffers from confirmation bias, so Phase 4.5 delegates review to an isolated Critic Subagent.
+
+### Step 1: Collect Working Tree Changes
+
+Inspect all modified and untracked files:
+```bash
+git status --short
+git diff HEAD
+```
+For untracked files (`??`), read their contents so the critic reviews complete implementations.
+
+### Step 2: Spawn Fresh-Context Critic Subagent
+
+Invoke a read-only Critic Subagent via `invoke_subagent` to evaluate the uncommitted diff without confirmation bias:
+- **Role**: `Code Critic & Quality Auditor`
+- **TypeName**: `research`
+- **Subagent Prompt Content**:
+  1. Provide the Plan Summary and Acceptance Criteria from Phase 1.
+  2. Provide the diff (`git diff HEAD`) and paths/contents of untracked files.
+  3. Rubric based on the Shift-Left Quality & Architecture Constitution and Simplifier:
+     - **Security**: Zero secrets, safe error handling, input validation, safe execution paths.
+     - **Architecture & Boundaries**: Layer encapsulation, correct dependency direction, zero banned imports.
+     - **Reuse & Anti-WET**: Reusing existing utilities, no duplicate logic or models.
+     - **Code Smells**: Deep nesting (>3 levels), large functions (>50 lines), magic constants, dead code, stray debug logs.
+     - **Simplifier Targets**: Clarity over cleverness, early returns, removing unneeded single-use abstractions.
+  4. Response Schema:
+     ```markdown
+     ### Review Findings
+     - **Decision**: APPROVE | ADAPT_REQUIRED | ESCALATE
+     - **Findings**:
+       - `[CRITICAL|HIGH|MEDIUM|LOW]` `path/to/file:line` — **Category**: [Security | Architecture | Reuse/DRY | Code Smell | Simplifier]
+         - **Issue**: [Concise description]
+         - **Adaptation**: [Concrete minimal fix required]
+     ```
+
+### Step 3: Apply Severity-Tiered Remediation Matrix
+
+Process findings reported by the Critic Subagent:
+
+| Severity | Scope | Required Action in Phase 4.5 |
+|---|---|---|
+| **CRITICAL** | Security vulnerabilities, secrets, broken boundary violations | **Mandatory Auto-Adapt**: Write/update failing test (RED), apply fix (GREEN), run micro-validation. Block commit if unresolved. |
+| **HIGH** | Logic bugs, contract mismatches, unhandled errors, architecture drift | **Mandatory Auto-Adapt**: Write/update failing test (RED), apply fix (GREEN), run micro-validation. Block commit if unresolved. |
+| **MEDIUM** | DRY violations, deep nesting (>3 levels), large functions (>50 LOC), dead code, stray debug logs, `simplifier` targets | **Auto-Adapt & Simplify**: Apply minimal behavior-preserving simplification or refactoring and re-verify tests. |
+| **LOW** | Minor stylistic preferences or acceptable trade-offs | **Log Only**: Record in report under *Self-Review & Adaptation Log* without unnecessary code churn. |
+
+### Step 4: Bounded Convergence (Max 2 Passes)
+
+To prevent infinite loops while guaranteeing quality:
+- **Pass 1**: Complete review of the working tree → Apply adaptations for `CRITICAL`, `HIGH`, and `MEDIUM` items.
+- **Fast Path**: If Pass 1 finds 0 `CRITICAL`/`HIGH`/`MEDIUM` items (or only `LOW`), proceed immediately to Phase 5.
+- **Pass 2 (Verification Pass)**: If Pass 1 modified code, re-run Phase 4 validation suite and have the Critic Subagent perform a focused verification pass on the remediated files.
+- **Circuit Breaker / Escalation Gate**:
+  - Maximum of 2 review passes allowed.
+  - If any `CRITICAL` or `HIGH` blocker remains unresolved after 2 passes, or if a finding conflicts with the user's explicit plan or specifications, STOP before Phase 6 (COMMIT) and escalate to the user via `ask_question`.
+
+**CHECKPOINT**: Working tree reviewed. All high/medium findings adapted and simplified. Zero blockers.
+
+---
+
 ## Phase 5 — REPORT
 
 ### Create Implementation Report
@@ -317,6 +381,7 @@ If not found, use default format:
 - Type Check & Lint: Passed
 - Unit Tests: Passed
 - Build: Passed
+- Self-Review & Adapt Loop: Passed (critic audited, all high/medium findings remediated)
 
 ## Artifacts
 - Report: `.agents/PRPs/reports/{name}-report.md`
@@ -380,6 +445,7 @@ Report comprehensive results to user:
 | Tests | [done] (N written) |
 | Build | [done] |
 | Integration | [done] or N/A |
+| Self-Review & Adapt | [done] (N findings adapted) |
 
 ### Commit
 
@@ -405,7 +471,7 @@ Report comprehensive results to user:
 | Phase 2 | [next] |
 | ... | ... |
 
-> Next step: Open PR in browser with `gh pr view {number} --web`, or run `/code-review {number}` for automated review.
+> Next step: Open PR in browser with `gh pr view {number} --web`, or merge via `gh pr merge {number}`.
 ```
 
 ---
@@ -445,6 +511,7 @@ Report comprehensive results to user:
 - **LINT_PASS**: Zero lint errors
 - **TESTS_PASS**: All tests green, new tests written
 - **BUILD_PASS**: Build succeeds
+- **REVIEW_ADAPT_PASS**: Self-review passed with zero unhandled critical/high findings
 - **REPORT_CREATED**: Implementation report saved
 - **PLAN_ARCHIVED**: Plan moved to `completed/`
 - **COMMITTED**: Changes cleanly staged and committed with conventional message

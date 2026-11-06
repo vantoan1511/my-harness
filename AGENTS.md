@@ -47,7 +47,8 @@ Execute plans via `/implement <plan-path>` for a seamless implementation-to-PR w
   ```
 - Do not refactor unrelated code.
 - Do not add speculative features or abstractions for hypothetical future requirements.
-- Upon successful validation, `/implement` automatically writes the implementation report, archives the plan, commits changes, and opens a GitHub pull request.
+- **Autonomous Self-Review & Adapt Loop**: Before committing, /implement automatically triggers an isolated Critic Subagent review and adapts high/medium findings via bounded TDD micro-loops.
+- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and opens a GitHub pull request.
 
 ## Phase 4 — Verify
 
