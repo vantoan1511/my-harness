@@ -40,19 +40,28 @@ def analyze_logs(log_dir):
                 all_requests.append({
                     'file': os.path.basename(log_file),
                     'time': current_time,
-                    'request': request
+                    'type': 'User Request',
+                    'text': request
+                })
+            elif line.startswith("**Trajectory Failure:**"):
+                failure = line.strip().replace("**Trajectory Failure:** ", "")
+                all_requests.append({
+                    'file': os.path.basename(log_file),
+                    'time': current_time,
+                    'type': 'Trajectory Failure',
+                    'text': failure
                 })
 
     if not all_requests:
         print("No user requests found in logs.")
         return
 
-    print("--- Extracted User Requests ---")
+    print("--- Extracted User Requests & Trajectory Failures ---")
     for req in all_requests:
-        print(f"[{req['file']} {req['time']}] {req['request']}")
+        print(f"[{req['file']} {req['time']}] [{req['type']}] {req['text']}")
 
     print("\n--- Summary ---")
-    print(f"Total extracted requests: {len(all_requests)}")
+    print(f"Total extracted events: {len(all_requests)}")
     print("Agent: Please analyze the above requests to identify repeated patterns, corrections, and tasks.")
     print("If you see repeated corrections, please create or update rules in .agents/rules/ or AGENTS.md.")
     print("If you see repeated tasks/steps without reasoning, please create executable scripts in .agents/scripts/.")

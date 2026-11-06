@@ -108,6 +108,60 @@ def log_interaction(user_input: str, tool_calls: list = None, base_dir: Path = N
 
     return True
 
+def _is_step_failure(step: dict) -> tuple[bool, str]:
+    if step.get("status") == "ERROR":
+        content = step.get("content", "")
+        return True, content[:100] if content else "Step marked as ERROR"
+    content = step.get("content", "")
+    if isinstance(content, str):
+        if "Command exited with code 1" in content or "exit code" in content.lower():
+            return True, content[:100]
+    return False, ""
+
+def extract_trajectory_failures(steps: list[dict], min_streak: int = 2) -> list[dict]:
+    failures = []
+    curr_streak = 0
+    streak_summaries = []
+
+    for step in steps:
+        if step.get("type") == "USER_INPUT":
+            curr_streak = 0
+            streak_summaries = []
+            continue
+
+        failed, desc = _is_step_failure(step)
+        if failed:
+            curr_streak += 1
+            if desc:
+                streak_summaries.append(desc.strip())
+            if curr_streak >= min_streak and curr_streak == min_streak:
+                summary = "; ".join(streak_summaries[-min_streak:])
+                failures.append({
+                    "streak_length": curr_streak,
+                    "summary": summary or f"Streak of {curr_streak} tool failures"
+                })
+        else:
+            curr_streak = 0
+            streak_summaries = []
+
+    return failures
+
+def log_trajectory_failures(failures: list[dict], base_dir: Path = None) -> bool:
+    if not failures:
+        return False
+    if base_dir is None:
+        base_dir = get_repo_root() / ".agents" / "logs"
+    os.makedirs(base_dir, exist_ok=True)
+    today = datetime.now().strftime("%Y-%m-%d")
+    filepath = base_dir / f"{today}.md"
+    timestamp = datetime.now().strftime("%H:%M:%S")
+
+    with open(filepath, "a", encoding="utf-8") as f:
+        for f_rec in failures:
+            f.write(f"## Time: {timestamp}\n")
+            f.write(f"**Trajectory Failure:** streak: {f_rec['streak_length']} consecutive failures ({f_rec['summary']})\n\n")
+    return True
+
 def handle_hook(log_dir: Path):
     """
     Hook mode: read JSON from stdin, extract input and tool calls, log if relevant.
@@ -126,6 +180,7 @@ def handle_hook(log_dir: Path):
             latest_user_input = None
             latest_step_idx = -1
             session_tool_calls = []
+            raw_steps = []
 
             with open(transcript_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -133,6 +188,7 @@ def handle_hook(log_dir: Path):
                         continue
                     try:
                         step = json.loads(line)
+                        raw_steps.append(step)
                         step_type = step.get("type")
 
                         if step_type == "USER_INPUT":
@@ -167,11 +223,23 @@ def handle_hook(log_dir: Path):
                 except Exception:
                     last_logged = -1
 
+            did_log = False
             if latest_user_input and latest_step_idx > last_logged:
                 logged = log_interaction(latest_user_input, tool_calls=session_tool_calls, base_dir=log_dir)
                 if logged:
-                    os.makedirs(log_dir, exist_ok=True)
-                    tracker_file.write_text(str(latest_step_idx), encoding="utf-8")
+                    did_log = True
+
+            # Also check trajectory failure streaks across parsed steps
+            if 'raw_steps' in locals() and raw_steps:
+                failures = extract_trajectory_failures(raw_steps, min_streak=2)
+                if failures and latest_step_idx > last_logged:
+                    logged_fail = log_trajectory_failures(failures, base_dir=log_dir)
+                    if logged_fail:
+                        did_log = True
+
+            if did_log:
+                os.makedirs(log_dir, exist_ok=True)
+                tracker_file.write_text(str(latest_step_idx), encoding="utf-8")
 
         print(json.dumps({}))
     except Exception:

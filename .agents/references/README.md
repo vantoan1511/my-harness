@@ -9,6 +9,8 @@ This directory contains on-demand architectural decisions (ADRs), canonical impl
 
 ## Catalog Index
 
+- [auto-curated-gotchas.md](file://gotchas/auto-curated-gotchas.md) — Auto-curated gotchas from self-reviews & reports.
+
 ### 1. Architecture Decision Records (`architecture/`)
 Deep rationale explaining **why** the system is built this way.
 - Document architectural choices, storage models, and design trade-offs here.

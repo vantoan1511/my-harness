@@ -14,6 +14,7 @@ Configuration is loaded from `.agents/harness.config.json` or `harness.config.js
 import sys
 import os
 import re
+import ast
 import json
 import subprocess
 import argparse
@@ -354,12 +355,121 @@ def run_command(name: str, cmd_str: str, cwd: Path) -> bool:
         print_error(f"Failed to execute {name}: {e}")
         return False
 
+def _is_structural_excluded(file_path: Path, structural_cfg: dict) -> bool:
+    if not structural_cfg.get("enabled", False):
+        return True
+    norm_path = file_path.as_posix()
+    excludes = structural_cfg.get("path_exclude", ["tests/", "test_", "/tests/"])
+    return any(ex in norm_path for ex in excludes)
+
+def _calc_ast_nesting(node, current_depth: int) -> int:
+    control_types = (
+        ast.If, ast.For, ast.AsyncFor, ast.While,
+        ast.Try, ast.With, ast.AsyncWith
+    )
+    max_d = current_depth
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        next_d = current_depth + 1 if isinstance(child, control_types) else current_depth
+        max_d = max(max_d, _calc_ast_nesting(child, next_d))
+    return max_d
+
+def _check_python_complexity(file_path: Path, content: str, max_lines: int, max_depth: int) -> list[Violation]:
+    violations = []
+    try:
+        tree = ast.parse(content, filename=str(file_path))
+    except Exception:
+        return violations
+
+    lines = content.splitlines()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        def_line = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
+        if "shift-left-ignore" in def_line:
+            continue
+
+        end_line = getattr(node, "end_lineno", node.lineno)
+        func_len = end_line - node.lineno + 1
+        if func_len > max_lines:
+            violations.append(Violation(
+                file=str(file_path), line=node.lineno,
+                code=def_line.strip(),
+                rule=f"Function `{node.name}` is {func_len} lines (exceeds limit {max_lines})",
+                suggestion="Decompose function into smaller single-responsibility helpers (KISS/SRP)."
+            ))
+
+        depth = _calc_ast_nesting(node, 0)
+        if depth > max_depth:
+            violations.append(Violation(
+                file=str(file_path), line=node.lineno,
+                code=def_line.strip(),
+                rule=f"Function `{node.name}` has control-flow nesting depth {depth} (exceeds limit {max_depth})",
+                suggestion="Refactor with guard clauses, early returns, or helper extraction."
+            ))
+    return violations
+
+def _check_brace_complexity(file_path: Path, content: str, max_lines: int, max_depth: int) -> list[Violation]:
+    violations = []
+    lines = content.splitlines()
+    func_sig = re.compile(r'^\s*(?:(?:export|async|pub|public|private|protected|static)\s+)*(?:function\s+([A-Za-z0-9_$]+)|fn\s+([A-Za-z0-9_$]+)|def\s+([A-Za-z0-9_$]+)|(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>)')
+    ctrl_re = re.compile(r'\b(if|for|while|switch|catch)\b')
+
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        m = func_sig.search(line)
+        if m and "{" in line and "shift-left-ignore" not in line:
+            fname = next((g for g in m.groups() if g), "anonymous")
+            start_idx = idx
+            brace_count = 0
+            curr_depth = 0
+            max_d = 0
+            for j in range(start_idx, len(lines)):
+                l = lines[j]
+                if ctrl_re.search(l) and "{" in l:
+                    curr_depth += 1
+                    max_d = max(max_d, curr_depth)
+                brace_count += l.count("{") - l.count("}")
+                if brace_count <= 0 and "}" in l:
+                    func_len = j - start_idx + 1
+                    if func_len > max_lines:
+                        violations.append(Violation(
+                            file=str(file_path), line=start_idx + 1, code=line.strip(),
+                            rule=f"Function `{fname}` is {func_len} lines (exceeds limit {max_lines})",
+                            suggestion="Decompose function into smaller helpers."
+                        ))
+                    if max_d > max_depth:
+                        violations.append(Violation(
+                            file=str(file_path), line=start_idx + 1, code=line.strip(),
+                            rule=f"Function `{fname}` has nesting depth {max_d} (exceeds limit {max_depth})",
+                            suggestion="Refactor with early returns or helper functions."
+                        ))
+                    idx = j
+                    break
+        idx += 1
+    return violations
+
+def check_structural_complexity(file_path: Path, content: str, structural_cfg: dict) -> list[Violation]:
+    if _is_structural_excluded(file_path, structural_cfg):
+        return []
+    max_lines = structural_cfg.get("max_function_lines", 50)
+    max_depth = structural_cfg.get("max_nesting_depth", 4)
+    norm = file_path.as_posix()
+    if norm.endswith(".py"):
+        return _check_python_complexity(file_path, content, max_lines, max_depth)
+    if norm.endswith((".ts", ".tsx", ".js", ".jsx", ".rs", ".go")):
+        return _check_brace_complexity(file_path, content, max_lines, max_depth)
+    return []
+
 def scan_files(files: list[Path], config: dict) -> dict[str, list[Violation]]:
     results = {}
     rules_cfg = config.get("rules", {})
     banned_imports = rules_cfg.get("banned_imports", [])
     banned_patterns = rules_cfg.get("banned_patterns", [])
     vue_rules = rules_cfg.get("vue_template_rules", {})
+    structural_cfg = rules_cfg.get("structural_rules", {})
 
     for f in files:
         try:
@@ -374,6 +484,7 @@ def scan_files(files: list[Path], config: dict) -> dict[str, list[Violation]]:
             file_violations.extend(check_banned_patterns(f, content, banned_patterns))
         if vue_rules:
             file_violations.extend(check_vue_templates(f, content, vue_rules))
+        file_violations.extend(check_structural_complexity(f, content, structural_cfg))
 
         if file_violations:
             results[f.as_posix()] = file_violations

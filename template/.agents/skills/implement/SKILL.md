@@ -264,6 +264,12 @@ If this implementation was for a PRD phase:
 1. Update the phase status from `in-progress` to `complete`
 2. Add report path as reference
 
+### Persist Curated Gotchas & Knowledge
+Extract Self-Review & Adaptation findings and deviations into persistent gotchas:
+```bash
+python .agents/scripts/curate_knowledge.py --persist
+```
+
 ### Archive Plan
 
 ```bash
