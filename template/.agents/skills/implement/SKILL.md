@@ -42,9 +42,20 @@ Note available commands for: type-check, lint, test, build.
 
 ## Phase 1 — LOAD
 
-Read the plan file using your file reading tools (e.g., `read_file` on `$ARGUMENTS`):
+### Parse Arguments & Execution Mode
+
+Parse `$ARGUMENTS` for the plan file path and optional execution mode flags:
+
+| Flag / Plan Metadata | Mode | Behavior |
+|---|---|---|
+| *(default)* | **Standard PR Mode** | Execute plan, validate, commit locally, push to remote, and create/update a GitHub PR (Phase 7). |
+| `--no-pr`, `--local`, `--spike`, or plan metadata `spike: true` / `local: true` | **Spike / Playground / Local-Only Mode** | Execute plan, validate, and create a clean local commit in Phase 6. **SKIP Phase 7 entirely** (do NOT push to remote origin and do NOT run `gh pr create`). |
+| `--no-commit` *(with Spike/Local mode)* | **Uncommitted / Staged Local Mode** | Keep changes uncommitted or staged in Phase 6 without creating a commit, and **SKIP Phase 7 entirely**. |
+
+Read the plan file using your file reading tools (e.g., `read_file` on the plan path from `$ARGUMENTS`):
 
 Extract these sections from the plan:
+- **Metadata / Frontmatter** — Check for `spike: true` or `local: true`
 - **Summary** — What is being built
 - **Patterns to Mirror** — Code conventions to follow
 - **Files to Change** — What to create or modify
@@ -285,6 +296,20 @@ mv "$ARGUMENTS" .agents/PRPs/plans/completed/
 
 Seamlessly stage and commit all implementation code, tests, reports, and archived plans with a descriptive conventional commit message.
 
+### 0. Check Spike / Local / No-Commit Flags
+
+Check if `$ARGUMENTS` contains `--no-pr`, `--local`, `--spike`, `--no-commit`, or if the plan metadata indicates `spike: true` / `local: true`:
+- **If `--no-commit` is specified**:
+  - Keep changes uncommitted or staged (`git add -A` if requested, without running `git commit`).
+  - **SKIP Phase 7 entirely** (do NOT push to remote origin and do NOT run `gh pr create`) and proceed directly to Phase 8.
+- **If `--no-pr`, `--local`, `--spike`, or plan metadata `spike: true` / `local: true` is present**:
+  - Proceed with steps 1–4 below to create a clean local commit (or offer to keep changes uncommitted/staged if `--no-commit` is specified).
+  - After committing locally, **SKIP Phase 7 entirely**: do NOT push to remote origin and do NOT run `gh pr create`.
+  - Print a clean summary:
+    ```
+    [Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.
+    ```
+
 ### 1. Revert Local Development Configs (Safety Guard)
 
 Ensure local development configurations, environment overrides, or debug flags are reverted to production-safe defaults before committing.
@@ -299,7 +324,7 @@ git diff --cached --stat
 
 If nothing is modified or staged (e.g. working tree is already clean):
 - Note that working tree is clean.
-- Proceed to Phase 7 if commits are ahead of base branch.
+- Proceed to Phase 7 if commits are ahead of base branch (unless in Spike / Local mode).
 
 ### 3. Craft Conventional Commit Message
 
@@ -333,6 +358,15 @@ git rev-parse --short HEAD
 ---
 
 ## Phase 7 — PR
+
+> **Mode Gate (Spike / Local-Only Mode Check)**:
+> Before executing Phase 7, check if `$ARGUMENTS` contains `--no-pr`, `--local`, `--spike`, or if the plan metadata indicates `spike: true` / `local: true`:
+> - **If present (Spike/Local Mode)**:
+>   - **SKIP Phase 7 entirely**: Do NOT push to remote origin (`git push`) and do NOT run `gh pr create`.
+>   - Print a clean summary: `[Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.`
+>   - Proceed directly to Phase 8.
+> - **If omitted (Default Mode)**:
+>   - Preserve the existing behavior (push and create PR) below.
 
 Seamlessly push the feature branch to the remote and create or update the GitHub Pull Request.
 
@@ -431,6 +465,12 @@ If `gh` CLI is not installed or unauthenticated:
 ---
 
 ## Phase 8 — OUTPUT
+
+If running in **Spike / Local-Only Mode** (`--no-pr`, `--local`, `--spike`, or `spike: true` / `local: true`), include the summary banner:
+
+```
+[Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.
+```
 
 Report comprehensive results to user:
 

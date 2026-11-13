@@ -46,6 +46,20 @@ class TestImplementSkill(unittest.TestCase):
             self.assertIn("Max 2 Passes", content)
             self.assertIn("REVIEW_ADAPT_PASS", content)
 
+    def test_implement_skill_supports_spike_and_local_mode(self):
+        for skill_path in [self.project_skill_dir / "SKILL.md", self.template_skill_dir / "SKILL.md"]:
+            content = skill_path.read_text(encoding="utf-8")
+            self.assertIn("--no-pr", content)
+            self.assertIn("--local", content)
+            self.assertIn("--spike", content)
+            self.assertIn("--no-commit", content)
+            self.assertIn("spike: true", content)
+            self.assertIn("local: true", content)
+            self.assertIn(
+                "[Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.",
+                content,
+            )
+
     def test_report_template_has_self_review_log(self):
         for tpl_path in [
             self.project_skill_dir / "resources" / "report-template.md",
