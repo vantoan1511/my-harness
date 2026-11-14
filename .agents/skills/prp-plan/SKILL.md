@@ -35,7 +35,10 @@ Determine input type from `$ARGUMENTS`:
 2. If `Part of #<epic>` appears in the body, fetch the Parent Epic (`gh issue view <epic> --json number,title,body`).
 3. Evaluate the **"Clear?" Gate** via `gh_project.py check-ready <number>`:
    - If `is_clear` is false or open technical/UX forks remain, clarify via `ask_question` and sync updated `### Acceptance Criteria` & `### Technical Notes / Dependencies` back with `gh issue edit <number> --body ...`.
-4. Populate `- **GitHub Issue**: #<number>` and `- **Parent Epic**: #<epic>` in the generated plan's `## Metadata` section (and prefer `issue-<number>-{kebab-name}.plan.md` for the plan filename).
+4. **Blocker Gate (Before Phase 1)**:
+   - Check the issue body, comments, and codebase for unresolved blockers (`Depends on #<N>` or open prerequisite issues).
+   - If the issue is blocked or mixes unblocked and blocked work, **STOP before planning**: split blocked deliverables into a separate issue, ensure every blocker has its own issue on the Project board, narrow the target issue to unblocked work only (or stop if 100% blocked), and reorganize the board before generating a `.plan.md`.
+5. Populate `- **GitHub Issue**: #<number>` and `- **Parent Epic**: #<epic>` in the generated plan's `## Metadata` section (and prefer `issue-<number>-{kebab-name}.plan.md` for the plan filename).
 
 ### PRD Parsing (when input is a PRD)
 

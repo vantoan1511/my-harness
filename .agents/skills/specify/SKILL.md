@@ -99,6 +99,19 @@ List specific ambiguities that cannot be answered by the code alone:
 
 ## Phase 1.5 — THE "CLEAR?" GATE (Readiness & Fast-Track Decision)
 
+### Blocker & Board Reorganization Gate (MANDATORY before Spec/Plan)
+
+During Phase 1 / Phase 1.5, inspect all `Depends on #<N>` links, open prerequisite issues, and blockers discovered during codebase reconnaissance:
+
+1. **All deliverables blocked**:
+   - **STOP immediately** at `/specify` — do NOT generate a `.prd.md` or `.plan.md`.
+   - Ensure every blocker exists as its own tracked GitHub Issue on the Project board (creating missing blocker/follow-up issues if needed), update the blocked issue's `### Technical Notes / Dependencies` with `Depends on #<blocker>`, set its status to `Todo`, and recommend resolving the blocker first.
+2. **Partially blocked (mix of unblocked + blocked work, e.g. Phase 1 unblocked, Phase 2 blocked)**:
+   - **STOP before Phase 4 (Plan Generation)** and reorganize the board first:
+     - Split the blocked portion into its own dedicated follow-up GitHub Issue (linked to the same `Parent Epic` and `Depends on #<blocker>`), add it to the Project board (`Todo`), and verify every blocker has its own issue.
+     - Narrow the current issue's `### Summary` and `### Acceptance Criteria` strictly to the **unblocked** deliverables so the resulting PR resolves 100% of the issue (`Closes #<issue>`).
+   - Confirm the reorganized scope before generating the plan.
+
 Before prompting the user, determine whether requirements are already unambiguous:
 
 - **CLEAR (`is_clear == true` from `gh_project.py check-ready` AND zero unresolved UX/architectural decision forks after codebase reconnaissance)**:
