@@ -139,6 +139,19 @@
         "build": { "type": "string" }
       },
       "additionalProperties": false
+    },
+    "github_project": {
+      "type": "object",
+      "description": "Cached GitHub Project (v2) metadata and field/iteration IDs used by gh_project.py",
+      "properties": {
+        "owner": { "type": "string" },
+        "repo": { "type": "string" },
+        "project_number": { "type": "integer" },
+        "project_id": { "type": "string" },
+        "title": { "type": "string" },
+        "fields": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": true
     }
   },
   "required": ["project_name"],
