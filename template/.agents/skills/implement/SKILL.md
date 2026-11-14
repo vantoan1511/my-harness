@@ -412,14 +412,14 @@ Check for PR templates in:
 2. `.github/PULL_REQUEST_TEMPLATE.md`
 3. `.github/pull_request_template.md`
 
-If found, fill in sections using the implementation findings and include `Closes #<issue>` (or `Refs #<issue>` for partial/multi-PR epics) plus verified Acceptance Criteria (`- [x]`) in the related issues section.
+If found, fill in sections using the implementation findings and include `Closes #<issue>` plus verified Acceptance Criteria (`- [x]`) in the related issues section. Every PR created for a GitHub Issue MUST resolve its linked issue on merge using `Closes #<issue>` (never leave an implemented plan's issue half-open with `Refs #<issue>`; if remaining work was discovered or deferred, split it into a separate backlog issue first).
 If not found, use default format:
 
 ```markdown
 ## Summary
 {1-2 sentence description from plan summary}
 
-{If an issue/ticket number was found: "Closes #<issue>" (or "Refs #<issue>" if partial)}
+{If an issue/ticket number was found: "Closes #<issue>"}
 
 ## Changes
 {bulleted list of tasks completed}
