@@ -119,19 +119,21 @@ python d:/Projects/my-harness/harness.py init --scope global
 Every project initialized with `my-harness` receives the complete suite of autonomous software engineering skills:
 
 ### 1. Specification & Planning
-- `/specify <intent>`: Discovers codebase context, asks interactive clarification questions via `ask_question`, defines interface contracts, writes a PRD spec (`.agents/PRPs/prds/`), generates an implementation plan (`.agents/PRPs/plans/`), and strictly ends with a clean plan handoff without preemptively implementing.
+- `/specify <intent | #issue>`: Discovers codebase context (and GitHub Issue + Parent Epic if `#N`), evaluates readiness via the **"Clear?" Gate** (`gh_project.py check-ready`), clarifies ambiguities via `ask_question` and syncs back via `gh issue edit`, defines interface contracts, writes a PRD spec (when needed), generates an implementation plan (`.agents/PRPs/plans/`), and ends with a clean plan handoff.
 - `/prd <topic>`: Interactive, hypothesis-driven Product Requirements Document generator.
-- `/prp-plan <feature>`: Deep 8-category codebase reconnaissance, UX delta mapping, step-by-step TDD task generation, and clean handoff to `/implement`.
+- `/prp-plan <feature | #issue>`: Deep 8-category codebase reconnaissance, GitHub Issue ingestion, UX delta mapping, step-by-step TDD task generation, and clean handoff to `/implement`.
 
 ### 2. Execution & Quality
-- `/implement <plan.md>`: Seamless execution loop: executes plan tasks sequentially with per-task RED/GREEN/VALIDATE micro-validation, creates implementation report (`reports/{name}-report.md`), archives plan (`plans/completed/`), and seamlessly commits changes and creates a GitHub pull request via `gh pr create`.
+- `/implement <plan.md>`: Seamless execution loop: moves linked GitHub Project issues to `In Progress`, executes plan tasks sequentially with per-task RED/GREEN/VALIDATE micro-validation, creates implementation report (`reports/{name}-report.md`), archives plan (`plans/completed/`), commits changes, opens a GitHub PR (`Closes #N`), and handles PR merge, issue closure (`Done`), and follow-up known-issue ticket creation.
 - `/tdd-workflow`: Enforces test-first development. Provides testing patterns for TypeScript/Node, Python, Rust, and Go.
 - `/simplifier`: Cleans up and simplifies recently modified code without altering functionality.
 - `/code-review [PR#]`: Dual-mode code reviewer (local uncommitted diff or GitHub PR) checking security, architecture, extensibility, and quality.
 
-### 3. Git & Delivery
+### 3. Git, GitHub Projects & Delivery
+- `/github-project-setup`: Sets up a GitHub Project (v2) with 2-week sprints, Roadmap date fields, Priority field, Board/Table/Roadmap views, Epics, `.github/ISSUE_TEMPLATE/task.yml`, and caches project metadata via `gh_project.py sync`.
+- `/github-backlog-management`: Creates structured issues, runs codebase-grounded refinement & vertical slicing checks, audits sprint carryover & dependency ordering, assigns sprints with auto-synced Roadmap dates (`gh_project.py assign-sprint`), rolls up Epic Roadmap dates (`gh_project.py rollup-epic`), and transitions ticket statuses (`gh_project.py set-status`).
 - `/commit [intent]`: Intelligent conventional commit with natural-language file staging.
-- `/pr [--draft]`: Validates preconditions, analyzes commits and diffs, matches PR templates, pushes branch, and opens GitHub PR via `gh pr create`.
+- `/pr [--draft]`: Validates preconditions, analyzes commits and diffs, matches PR templates, pushes branch, opens GitHub PR via `gh pr create`, and supports post-PR merge, issue closure (`Done`), and follow-up issue creation.
 - `/pr-changelog [PR#]`: Generates a high-signal, categorized changelog from Git history, diffs, and PR metadata; automatically updates `CHANGELOG.md`.
 - `/release`: Semantic versioning release workflow, lockfile update, and release branch creation.
 

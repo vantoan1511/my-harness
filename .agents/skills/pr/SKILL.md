@@ -173,6 +173,30 @@ Next steps:
 
 ---
 
+## Phase 7 — MERGE, CLOSE ISSUE & FOLLOW-UP TRIAGE
+
+When the user requests merging or closing out the PR lifecycle:
+
+1. **Merge & Sync Base Branch**:
+   ```bash
+   gh pr checks <number>
+   gh pr merge <number> --squash --delete-branch
+   git checkout <base>
+   git pull origin <base>
+   ```
+2. **Close Linked Issue & Update Project Board Status (`Done`)**:
+   - Confirm linked `Closes #<issue>` tickets are closed (`gh issue view <issue> --json state`).
+   - Transition each closed issue to `Done` and roll up any Parent Epic Roadmap dates:
+     ```bash
+     python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'set-status', '<ISSUE_NUMBER>', 'Done']) if os.path.exists(p) else 0"
+     ```
+3. **Found Known Issues? → Create New Issue**:
+   - Inspect `.agents/reviews/pr-<number>-review.md` and `.agents/PRPs/reports/` for deferred findings or known issues.
+   - If any exist, ask the user via `ask_question` (`is_multi_select: true`) which items should become new backlog tickets.
+   - Create each selected ticket with `gh issue create`, add it to the GitHub Project (`gh project item-add`), and set `Status = Todo`.
+
+---
+
 ## Edge Cases
 
 - **No `gh` CLI**: Stop with: "GitHub CLI (`gh`) is required. Install: <https://cli.github.com/>"

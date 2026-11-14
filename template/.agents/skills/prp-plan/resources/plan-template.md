@@ -11,6 +11,8 @@ As a [user], I want [capability], so that [benefit].
 
 ## Metadata
 - **Complexity**: [Small | Medium | Large | XL]
+- **GitHub Issue**: [#number or "N/A"]
+- **Parent Epic**: [#epic-number or "N/A"]
 - **Source PRD**: [path or "N/A"]
 - **PRD Phase**: [phase name or "N/A"]
 - **Estimated Files**: [count]

@@ -55,7 +55,7 @@ Parse `$ARGUMENTS` for the plan file path and optional execution mode flags:
 Read the plan file using your file reading tools (e.g., `read_file` on the plan path from `$ARGUMENTS`):
 
 Extract these sections from the plan:
-- **Metadata / Frontmatter** — Check for `spike: true` or `local: true`
+- **Metadata / Frontmatter** — Check for `spike: true`, `local: true`, `GitHub Issue` (`#<number>`), and `Parent Epic` (`#<epic>`)
 - **Summary** — What is being built
 - **Patterns to Mirror** — Code conventions to follow
 - **Files to Change** — What to create or modify
@@ -87,9 +87,16 @@ git status --porcelain
 | Current State | Action |
 |---|---|
 | On feature branch | Use current branch |
-| On main / master, clean working tree | Create feature branch: `git checkout -b feat/{plan-name}` |
+| On main / master, clean working tree | Create feature branch: `git checkout -b feat/issue-<number>-{plan-name}` (or `feat/{plan-name}` if no issue) |
 | On main / master, dirty working tree | **STOP** — Ask user to stash or commit first |
 | In a git worktree for this feature | Use the worktree |
+
+### Transition Project Status to `In Progress` (if linked to a GitHub Issue)
+
+When `GitHub Issue` `#<number>` is present in the plan metadata, move the ticket on the GitHub Project board to `In Progress`:
+```bash
+python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'set-status', '<ISSUE_NUMBER>', 'In Progress']) if os.path.exists(p) else 0"
+```
 
 ### Sync Remote
 
@@ -398,20 +405,27 @@ gh pr view --json number,url 2>$null || gh pr list --state open --json number,ur
 
 ### 3. Discover PR Template & Structure Body
 
+Extract any associated `GitHub Issue` (`#<number>`) from the plan metadata, source PRD, or branch name.
+
 Check for PR templates in:
 1. `.github/PULL_REQUEST_TEMPLATE/`
 2. `.github/PULL_REQUEST_TEMPLATE.md`
 3. `.github/pull_request_template.md`
 
-If found, fill in sections using the implementation findings.
+If found, fill in sections using the implementation findings and include `Closes #<issue>` (or `Refs #<issue>` for partial/multi-PR epics) plus verified Acceptance Criteria (`- [x]`) in the related issues section.
 If not found, use default format:
 
 ```markdown
 ## Summary
 {1-2 sentence description from plan summary}
 
+{If an issue/ticket number was found: "Closes #<issue>" (or "Refs #<issue>" if partial)}
+
 ## Changes
 {bulleted list of tasks completed}
+
+## Acceptance Criteria Verified
+{checked `- [x]` list from linked GitHub Issue / plan}
 
 ## Files Changed
 {table or summary of changed files}
@@ -450,9 +464,9 @@ gh pr create \
   --body "{PR body}"
 ```
 
-Verify PR details:
+Verify PR details (including `closingIssuesReferences` when an issue number was linked):
 ```bash
-gh pr view --json number,url,title,state,baseRefName,headRefName,additions,deletions,changedFiles
+gh pr view --json number,url,title,state,baseRefName,headRefName,additions,deletions,changedFiles,closingIssuesReferences
 ```
 
 ### Fallback if GitHub CLI Unavailable
@@ -519,6 +533,50 @@ Report comprehensive results to user:
 
 > Next step: Open PR in browser with `gh pr view {number} --web`, or merge via `gh pr merge {number}`.
 ```
+
+---
+
+## Phase 9 — MERGE, CLOSE ISSUE & FOLLOW-UP TRIAGE
+
+> **Mode Gate (Spike / Local-Only Mode)**: Skip Phase 9 entirely when `--no-pr`, `--local`, `--spike`, `--no-commit`, or `spike: true` / `local: true` is active.
+
+### Step 1: Known Issues & Follow-Up Triage (`Found Known Issues? → Create New Issue`)
+
+Before or immediately after merging the PR, harvest candidate follow-up items from:
+1. Deferred `LOW` / `MEDIUM` findings logged in Phase 4.5 `Self-Review & Adaptation Log`.
+2. `Deviations from Plan` and `Issues Encountered` in `.agents/PRPs/reports/{name}-report.md`.
+3. Any `Out of Scope` / `NOT Building` edge cases uncovered during execution.
+
+If one or more candidate known issues exist:
+- Prompt the user via `ask_question` (`is_multi_select: true`): *"Found known issues or follow-up items. Which ones should I create as new GitHub Project issues?"*
+- For each selected item, create a structured GitHub Issue matching `.github/ISSUE_TEMPLATE/task.yml` (`Parent Epic`, `Summary`, `Acceptance Criteria`, and `Technical Notes / Dependencies` referencing `Discovered in PR #<pr_number>`), add it to the Project (`gh project item-add`), and set `Status = Todo` and `Priority`:
+  ```powershell
+  $url = gh issue create --title "<Business-oriented follow-up title>" --body $followupBody
+  gh project item-add <project-number> --owner <owner> --url $url
+  ```
+- Record created follow-up issue numbers under `## Known Issues & Follow-Up Tickets` in the implementation report.
+
+### Step 2: Merge PR & Close Issue (`Merge & Close Issue`)
+
+When the user confirms merging (or passes `--merge`):
+1. Verify CI checks pass:
+   ```bash
+   gh pr checks <number>
+   ```
+2. Merge PR, delete branch, and sync local base branch:
+   ```bash
+   gh pr merge <number> --squash --delete-branch
+   git checkout main
+   git pull origin main
+   ```
+3. Verify the linked GitHub Issue `#<issue>` is closed (`gh issue view <issue> --json state`) and transition its GitHub Project status to `Done`:
+   ```bash
+   python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'set-status', '<ISSUE_NUMBER>', 'Done']) if os.path.exists(p) else 0"
+   ```
+4. If a `Parent Epic` `#<epic>` is linked, refresh its Roadmap dates:
+   ```bash
+   python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'rollup-epic', '<EPIC_NUMBER>']) if os.path.exists(p) else 0"
+   ```
 
 ---
 

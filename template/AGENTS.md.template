@@ -16,16 +16,17 @@ Agents must follow this workflow for every task.
 ## Phase 1 — Understand
 
 Before modifying code:
-1. Inspect the relevant existing implementation and neighboring components for established patterns.
-2. Search for reusable modules, functions, services, utilities, and types.
-3. Identify the smallest set of files that should change.
+1. If working from a GitHub Issue (`#N`), inspect the issue (`gh issue view N`), its Parent Epic, and run the `"Clear?"` readiness check (`gh_project.py check-ready N`).
+2. Inspect the relevant existing implementation and neighboring components for established patterns.
+3. Search for reusable modules, functions, services, utilities, and types.
+4. Identify the smallest set of files that should change.
 
 Do not begin implementation before completing this phase.
 
 ## Phase 2 — Plan
 
 For non-trivial tasks:
-1. Use `/specify` or `/prp-plan` to create or update the plan under `.agents/PRPs/plans/`.
+1. Use `/specify` (or `/specify #N` / `/prp-plan #N` for GitHub Issues) to evaluate readiness (the `"Clear?"` gate), clarify any ambiguities via `ask_question`, sync updated Acceptance Criteria & Technical Notes back to the issue (`gh issue edit`), and create/update the plan under `.agents/PRPs/plans/`.
 2. Record:
    - problem
    - current implementation
@@ -39,6 +40,7 @@ For non-trivial tasks:
 ## Phase 3 — Implement
 
 Execute plans via `/implement <plan-path>` for a seamless implementation-to-PR workflow:
+- When linked to a GitHub Issue, automatically transition the Project board status to `In Progress` (`gh_project.py set-status <N> "In Progress"`).
 - Write failing tests first (RED).
 - Implement minimal code to pass (GREEN).
 - Run micro-validation after EVERY file edit:
@@ -48,7 +50,7 @@ Execute plans via `/implement <plan-path>` for a seamless implementation-to-PR w
 - Do not refactor unrelated code.
 - Do not add speculative features or abstractions for hypothetical future requirements.
 - **Autonomous Self-Review & Adapt Loop**: Before committing, /implement automatically triggers an isolated Critic Subagent review and adapts high/medium findings via bounded TDD micro-loops.
-- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and opens a GitHub pull request.
+- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and opens a GitHub pull request (`Closes #N`).
 
 ## Phase 4 — Verify
 
@@ -70,6 +72,7 @@ The final response must contain:
 - Files changed
 - Verification performed
 - Remaining issues or limitations
+- GitHub PR merge, issue closure (`Done` status via `gh_project.py set-status`), and triage of any discovered known issues into new GitHub Project tickets (`Found Known Issues? -> Create New Issue`).
 
 ---
 

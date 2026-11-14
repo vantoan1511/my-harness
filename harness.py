@@ -116,6 +116,11 @@ def deduplicate_project_scope(target_agents: Path, global_info: GlobalInstallati
 
     if not global_info.is_installed:
         return summary
+    try:
+        if target_agents.resolve() == (get_harness_root() / ".agents").resolve():
+            return summary
+    except Exception:
+        pass
 
     skills_dir = target_agents / "skills"
     if skills_dir.exists():
@@ -164,7 +169,7 @@ def repair_project_structure(target_agents: Path, dry_run: bool = False) -> dict
     return summary
 
 def repair_project_scripts(target_agents: Path, template_agents: Path, dry_run: bool = False) -> dict:
-    core_scripts = ["verify_shift_left.py", "shift_left_hook.py", "memory_logger.py", "curate_knowledge.py"]
+    core_scripts = ["verify_shift_left.py", "shift_left_hook.py", "memory_logger.py", "curate_knowledge.py", "gh_project.py"]
     summary = {"restored_scripts": [], "existing_scripts": []}
     scripts_dir = target_agents / "scripts"
     if not dry_run:
@@ -512,7 +517,7 @@ def deploy_antigravity_plugin(harness_root: Path, target_plugin_dir: Path, pack:
         if scripts_src.exists():
             for s_file in scripts_src.glob("*.py"):
                 shutil.copy2(s_file, scripts_target_dir / s_file.name)
-        for helper_script in ("shift_left_hook.py", "memory_logger.py", "auto_update_hook.py"):
+        for helper_script in ("shift_left_hook.py", "memory_logger.py", "auto_update_hook.py", "gh_project.py"):
             helper_src = template_agents / "scripts" / helper_script
             if helper_src.exists():
                 shutil.copy2(helper_src, scripts_target_dir / helper_script)
@@ -914,10 +919,10 @@ def install_git_hooks(repo_root: Path) -> bool:
         "#!/bin/sh\n"
         "# my-harness git post-merge auto-update hook\n"
         "# Automatically synchronizes global Antigravity plugin after pull or merge\n"
-        "if command -v python3 >/dev/null 2>&1; then\n"
-        '    PYTHON_BIN="python3"\n'
-        "elif command -v python >/dev/null 2>&1; then\n"
+        'if command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then\n'
         '    PYTHON_BIN="python"\n'
+        'elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then\n'
+        '    PYTHON_BIN="python3"\n'
         "else\n"
         "    exit 0\n"
         "fi\n\n"
@@ -931,10 +936,10 @@ def install_git_hooks(repo_root: Path) -> bool:
         "#!/bin/sh\n"
         "# my-harness git pre-commit shift-left enforcement hook\n"
         "# Runs fast architectural and static verification on staged files\n"
-        "if command -v python3 >/dev/null 2>&1; then\n"
-        '    PYTHON_BIN="python3"\n'
-        "elif command -v python >/dev/null 2>&1; then\n"
+        'if command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then\n'
         '    PYTHON_BIN="python"\n'
+        'elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then\n'
+        '    PYTHON_BIN="python3"\n'
         "else\n"
         "    exit 0\n"
         "fi\n\n"
@@ -1008,7 +1013,7 @@ def cmd_doctor(args):
             print(f"{COLOR_YELLOW}[WARN]{COLOR_RESET} Missing file: .agents/{json_file}")
 
     # 3. Scripts check
-    for s in ("verify_shift_left.py", "shift_left_hook.py", "memory_logger.py", "curate_knowledge.py"):
+    for s in ("verify_shift_left.py", "shift_left_hook.py", "memory_logger.py", "curate_knowledge.py", "gh_project.py"):
         sp = target_agents / "scripts" / s
         if sp.exists():
             print(f"{COLOR_GREEN}[PASS]{COLOR_RESET} Script present: .agents/scripts/{s}")

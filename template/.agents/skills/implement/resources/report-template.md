@@ -58,6 +58,9 @@
 ## Knowledge Base Updates (Self-Improving)
 [List any new gotchas, architectural decisions, or recipes contributed to `.agents/references/`, or "None"]
 
+## Known Issues & Follow-Up Tickets
+[List any discovered known issues, deferred edge cases, and newly created follow-up GitHub Issue `#<number>` links, or "None"]
+
 ## Next Steps
 - [ ] Review PR: [PR URL or #<number>]
 - [ ] Automated review: Already completed via Phase 4.5 Self-Review & Adapt Loop

@@ -19,11 +19,23 @@ Determine input type from `$ARGUMENTS`:
 
 | Input Pattern | Detection | Action |
 |---|---|---|
+| `#<number>` or GitHub Issue URL | GitHub Issue reference | Fetch issue & Parent Epic (`gh issue view`), run readiness gate (`check-ready`), clarify & sync back if unclear, then proceed to Phase 1 |
 | Path ending in `.prd.md` | File path to PRD | Parse PRD, find next pending phase |
 | Path to `.md` with "Implementation Phases" | PRD-like document | Parse phases, find next pending |
 | Path to any other file | Reference file | Read file for context, treat as free-form |
 | Free-form text | Feature description | Proceed directly to Phase 1 |
 | Empty / blank | No input | Ask user what feature to plan |
+
+### GitHub Issue Ingestion (when input is `#<number>` or Issue URL)
+
+1. Fetch the issue and comments:
+   ```bash
+   gh issue view <number> --json number,title,body,labels,comments,projectItems
+   ```
+2. If `Part of #<epic>` appears in the body, fetch the Parent Epic (`gh issue view <epic> --json number,title,body`).
+3. Evaluate the **"Clear?" Gate** via `gh_project.py check-ready <number>`:
+   - If `is_clear` is false or open technical/UX forks remain, clarify via `ask_question` and sync updated `### Acceptance Criteria` & `### Technical Notes / Dependencies` back with `gh issue edit <number> --body ...`.
+4. Populate `- **GitHub Issue**: #<number>` and `- **Parent Epic**: #<epic>` in the generated plan's `## Metadata` section (and prefer `issue-<number>-{kebab-name}.plan.md` for the plan filename).
 
 ### PRD Parsing (when input is a PRD)
 

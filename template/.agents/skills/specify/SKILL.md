@@ -9,31 +9,35 @@ Turn raw, informal user intent into a validated, contract-first specification an
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                   INTENT ──► SPEC ──► PLAN WORKFLOW                    │
+│              ISSUE / INTENT ──► CLEAR? ──► SPEC ──► PLAN               │
 │                                                                        │
-│  [User Intent]                                                         │
+│  [GitHub Issue #N or User Intent]                                      │
 │        │                                                               │
 │        ▼                                                               │
-│  Phase 1: RECONNAISSANCE (Autonomous Codebase Exploration)             │
+│  Phase 1: RECONNAISSANCE (Issue Fetch + Autonomous Exploration)        │
+│        • Fetch issue & Parent Epic (`gh issue view`) if #N provided    │
 │        • Survey analogous features, APIs, stores, & components         │
-│        • Locate reusable modules, tokens, & patterns                   │
+│        │                                                               │
+│        ▼                                                               │
+│  Phase 1.5: THE "CLEAR?" GATE (Definition of Ready Check)              │
+│        • Run `gh_project.py check-ready` + decision-fork check         │
+│        • Clear? ──Yes──► Skip Phase 2 & duplicate PRD ──► Phase 4 Plan │
+│        • Clear? ──No───► Continue to Phase 2 Clarification             │
 │        │                                                               │
 │        ▼                                                               │
 │  Phase 2: CLARIFICATION (Interactive Ambiguity Resolution)             │
-│        • Identify decision forks, UX behaviors, & technical options    │
 │        • Ask targeted questions (using `ask_question` interactive UI)  │
+│        • Sync clarified AC & notes back to Issue (`gh issue edit`)     │
 │        │                                                               │
 │        ▼                                                               │
 │  Phase 3: SPECIFICATION (Contract-First PRD/Spec)                      │
-│        • Define Problem, User Story, Invariants, & Scope               │
 │        • Define interface contracts, models, schemas, & boundaries     │
-│        • Output: `.agents/PRPs/prds/{name}.prd.md`                     │
+│        • Output: `.agents/PRPs/prds/{name}.prd.md` (when needed)       │
 │        │                                                               │
 │        ▼                                                               │
 │  Phase 4: SHIFT-LEFT PLAN GENERATION                                   │
-│        • Automatically transitions spec into `prp-plan`                │
 │        • Generates `.agents/PRPs/plans/{name}.plan.md`                 │
-│        • Pre-fills TDD failing test specs & micro-validation commands  │
+│        • Embeds `GitHub Issue` & `Parent Epic` metadata + TDD specs    │
 │        │                                                               │
 │        ▼                                                               │
 │  [Ready to `/implement`]                                               │
@@ -44,6 +48,7 @@ Turn raw, informal user intent into a validated, contract-first specification an
 
 ## When to Activate
 
+- User provides a GitHub Issue reference (`/specify #42` or issue URL) to refine, clarify, and plan.
 - User provides an informal, high-level, or underspecified feature request.
 - User invokes `/specify <intent>` or `/spec <intent>`.
 - User asks to explore a capability before writing code.
@@ -53,7 +58,18 @@ Turn raw, informal user intent into a validated, contract-first specification an
 
 ## Phase 1 — RECONNAISSANCE: Autonomous Information Gathering
 
-**DO NOT ask questions immediately.** Before engaging the user, silently gather deep codebase context so every subsequent question is informed, specific, and grounded in repository evidence.
+**DO NOT ask questions immediately.** Before engaging the user, silently gather deep codebase context (and GitHub Issue context, if an issue is referenced) so every subsequent question is informed, specific, and grounded in repository evidence.
+
+### 0a. GitHub Issue & Epic Ingestion (When Input is `#<issue>` or Issue URL)
+- Extract the issue number and inspect the ticket and comments:
+  ```bash
+  gh issue view <number> --json number,title,body,labels,comments,projectItems
+  ```
+- If the issue body contains `Part of #<epic>`, also inspect the Parent Epic (`gh issue view <epic> --json number,title,body`) for broader goals and constraints.
+- Evaluate Issue Readiness using `gh_project.py`:
+  ```bash
+  python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); sys.exit(subprocess.call([sys.executable, p, 'check-ready', '<number>']) if os.path.exists(p) else 0)"
+  ```
 
 ### 0. Consult Curated Knowledge Base
 - Inspect `.agents/references/README.md` for relevant Architectural Decision Records (ADRs), canonical recipes, and domain gotchas before searching from scratch.
@@ -78,6 +94,18 @@ List specific ambiguities that cannot be answered by the code alone:
 - **Scope boundaries**: What is in v1 vs out of scope?
 - **Placement & UX**: Where should the control/view live?
 - **Behavioral choices**: Confirmation dialog vs instant feedback? Polling vs websocket stream?
+
+---
+
+## Phase 1.5 — THE "CLEAR?" GATE (Readiness & Fast-Track Decision)
+
+Before prompting the user, determine whether requirements are already unambiguous:
+
+- **CLEAR (`is_clear == true` from `gh_project.py check-ready` AND zero unresolved UX/architectural decision forks after codebase reconnaissance)**:
+  - **Skip Phase 2** (no redundant questions) and **skip creating a duplicate `.prd.md`** when the GitHub Issue + Parent Epic already serve as the authoritative spec.
+  - Transition directly to **Phase 4 — PLAN GENERATION** to produce `.agents/PRPs/plans/issue-<number>-{kebab-name}.plan.md` with `- **GitHub Issue**: #<number>` and `- **Parent Epic**: #<epic>` in Metadata.
+- **NOT CLEAR (`is_clear == false` OR unresolved decision forks remain)**:
+  - Proceed to **Phase 2 — CLARIFICATION**.
 
 ---
 
@@ -117,6 +145,12 @@ When decision forks have clear choices, use the interactive `ask_question` tool 
 - Always provide a recommended option prefixed with `(Recommended)`.
 - Never ask questions the codebase already answers (e.g. project framework, theme, language).
 - Wait for user response before generating the specification.
+
+### 3. Sync Clarified Spec Back to GitHub Issue (When Working from Issue `#<number>`)
+After receiving the user's answers, update the GitHub Issue so it stays the single source of truth with refined `### Summary`, `### Acceptance Criteria` (`- [ ]`), and `### Technical Notes / Dependencies`:
+```powershell
+gh issue edit <number> --body $updatedBody
+```
 
 ---
 
@@ -196,8 +230,8 @@ Save the plan to:
 ```
 
 The plan must:
-1. Reference the newly created `.prd.md` as its source PRD.
-2. Embed the contracts defined in Phase 3.
+1. Reference the newly created `.prd.md` (or `GitHub Issue #<number>` / `Parent Epic #<epic>`) in its Metadata.
+2. Embed the contracts defined in Phase 3 (or resolved from the GitHub Issue).
 3. Define **Step-by-Step Tasks** where each task contains:
    - `ACTION`: concrete edit description
    - `TEST_FIRST`: specific test file path, test name, input fixture, expected assertion
