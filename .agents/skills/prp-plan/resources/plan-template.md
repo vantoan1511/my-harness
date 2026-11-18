@@ -15,6 +15,9 @@ As a [user], I want [capability], so that [benefit].
 - **Parent Epic**: [#epic-number or "N/A"]
 - **Source PRD**: [path or "N/A"]
 - **PRD Phase**: [phase name or "N/A"]
+- **Branch Name**: [feat/<name> | fix/<name> | <current-branch>]
+- **Auto-Create PR**: [true | false (local: true)]
+- **Base Branch**: [main | <target-branch>]
 - **Estimated Files**: [count]
 
 ---

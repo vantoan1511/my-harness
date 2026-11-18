@@ -26,7 +26,7 @@ Do not begin implementation before completing this phase.
 ## Phase 2 — Plan
 
 For non-trivial tasks:
-1. Use `/specify` (or `/specify #N` / `/prp-plan #N` for GitHub Issues) to evaluate readiness (the `"Clear?"` gate), clarify any ambiguities via `ask_question`, sync updated Acceptance Criteria & Technical Notes back to the issue (`gh issue edit`), and create/update the plan under `.agents/PRPs/plans/`.
+1. Use `/specify` (or `/specify #N` / `/prp-plan #N` for GitHub Issues) to evaluate readiness (the `"Clear?"` gate), clarify any ambiguities and Delivery & PR Preferences (**Branch Name**, **Auto-Create PR** seamless mode, and PR target **Base Branch**) via `ask_question`, sync updated Acceptance Criteria & Technical Notes back to the issue (`gh issue edit`), and create/update the plan under `.agents/PRPs/plans/`.
 2. Record:
    - problem
    - current implementation
@@ -35,6 +35,7 @@ For non-trivial tasks:
    - reusable existing code
    - risks & mitigations
    - verification steps
+   - delivery & PR metadata (`Branch Name`, `Auto-Create PR`, and `Base Branch`)
 3. **Plan Handoff**: The planning turn must conclude strictly with the standard handoff block pointing to the plan file (`Next Step: Run /implement ...`). Never begin writing implementation or feature code during the planning phase.
 
 ## Phase 3 — Implement
@@ -50,7 +51,7 @@ Execute plans via `/implement <plan-path>` for a seamless implementation-to-PR w
 - Do not refactor unrelated code.
 - Do not add speculative features or abstractions for hypothetical future requirements.
 - **Autonomous Self-Review & Adapt Loop**: Before committing, /implement automatically triggers an isolated Critic Subagent review and adapts high/medium findings via bounded TDD micro-loops.
-- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and opens a GitHub pull request (`Closes #N`).
+- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and (in Seamless Mode `Auto-Create PR: true`) opens a GitHub pull request targeting `Base Branch` (`Closes #N`), or stays local-only when `--no-pr` / `Auto-Create PR: false` (`local: true`) is configured.
 
 ## Phase 4 — Verify
 
