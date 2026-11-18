@@ -5,12 +5,16 @@ description: Create a GitHub PR from current branch with unpushed commits — di
 
 # Create Pull Request
 
-**Input**: `$ARGUMENTS` — optional, may contain a base branch name and/or flags (e.g., `--draft`).
+**Input**: `$ARGUMENTS` — optional, may contain a base branch name and/or flags (e.g., `--draft`, `--base <branch>`).
 
-**Parse `$ARGUMENTS`**:
-- Extract any recognized flags (`--draft`)
+**Parse `$ARGUMENTS` & Resolve `<base>`**:
+- Extract any recognized flags (`--draft`) and optional `--base <branch>`
 - Treat remaining non-flag text as the base branch name
-- Default base branch to `main` if none specified
+- If no base branch is explicitly provided in `$ARGUMENTS`, resolve `<base>` in order:
+  1. `git config --get branch.<current-branch>.base` (if set when branching from an integration branch)
+  2. `Base Branch` / `base_branch` in any linked PRP plan metadata
+  3. Closest ancestor remote integration branch (e.g. `origin/feat/*` ahead of `origin/main` that is an ancestor of `HEAD` or has a closer merge-base than `origin/main`)
+  4. Default to `main`
 
 ---
 

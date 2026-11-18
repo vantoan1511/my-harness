@@ -44,7 +44,7 @@ Note available commands for: type-check, lint, test, build.
 
 ### Parse Arguments & Execution Mode
 
-Parse `$ARGUMENTS` for the plan file path and optional execution mode flags:
+Parse `$ARGUMENTS` for the plan file path and optional execution mode flags (`--no-pr`, `--local`, `--spike`, `--no-commit`, `--base <branch>`):
 
 | Flag / Plan Metadata | Mode | Behavior |
 |---|---|---|
@@ -55,7 +55,7 @@ Parse `$ARGUMENTS` for the plan file path and optional execution mode flags:
 Read the plan file using your file reading tools (e.g., `read_file` on the plan path from `$ARGUMENTS`):
 
 Extract these sections from the plan:
-- **Metadata / Frontmatter** — Check for `spike: true`, `local: true`, `GitHub Issue` (`#<number>`), and `Parent Epic` (`#<epic>`)
+- **Metadata / Frontmatter** — Check for `spike: true`, `local: true`, `Base Branch` / `base_branch`, `GitHub Issue` (`#<number>`), and `Parent Epic` (`#<epic>`)
 - **Summary** — What is being built
 - **Patterns to Mirror** — Code conventions to follow
 - **Files to Change** — What to create or modify
@@ -82,13 +82,20 @@ git branch --show-current
 git status --porcelain
 ```
 
-### Branch Decision
+### Base Branch & Branch Decision
+
+Resolve `<base-branch>` in priority order:
+1. Explicit `--base <branch>` from `$ARGUMENTS`
+2. Plan metadata `Base Branch` / `base_branch`
+3. `git config --get branch.<current-branch>.base`
+4. Closest ancestor remote integration branch (e.g. `origin/feat/*` ahead of `origin/main` that is an ancestor of `HEAD` or has a closer merge-base than `origin/main`)
+5. Default to `main`
 
 | Current State | Action |
 |---|---|
-| On feature branch | Use current branch |
-| On main / master, clean working tree | Create feature branch: `git checkout -b feat/issue-<number>-{plan-name}` (or `feat/{plan-name}` if no issue) |
-| On main / master, dirty working tree | **STOP** — Ask user to stash or commit first |
+| On feature/task branch | Use current branch (and preserve resolved `<base-branch>`) |
+| On `main` / `master` or an integration `feat/*` branch (when `--base` or plan targets it), clean working tree | Create feature branch: `git checkout -b feat/issue-<number>-{plan-name}` (or `feat/{plan-name}` if no issue), and record its base: `git config branch.<new-branch>.base <base-branch>` |
+| On `main` / `master`, dirty working tree | **STOP** — Ask user to stash or commit first |
 | In a git worktree for this feature | Use the worktree |
 
 ### Transition Project Status to `In Progress` (if linked to a GitHub Issue)
@@ -382,14 +389,14 @@ Seamlessly push the feature branch to the remote and create or update the GitHub
 ```bash
 git branch --show-current
 git status --short
-git log origin/main..HEAD --oneline
+git log origin/<base-branch>..HEAD --oneline
 ```
 
 | Check | Condition | Action if Failed |
 |---|---|---|
-| Not on base branch | Current branch ≠ `main` / `master` | Stop: "Cannot create PR from base branch." |
+| Not on base branch | Current branch ≠ `<base-branch>` (`main` / `master` / integration branch) | Stop: "Cannot create PR from base branch." |
 | Clean working directory | No uncommitted changes | Re-run staging/commit from Phase 6 |
-| Commits ahead | `git log origin/main..HEAD` not empty | Stop: "No commits ahead of base. Nothing to PR." |
+| Commits ahead | `git log origin/<base-branch>..HEAD` not empty | Stop: "No commits ahead of `<base-branch>`. Nothing to PR." |
 
 ### 2. Check for Existing PR
 
@@ -451,7 +458,7 @@ git push -u origin HEAD
 If push fails due to divergence:
 ```bash
 git fetch origin
-git rebase origin/main
+git rebase origin/<base-branch>
 git push -u origin HEAD
 ```
 
@@ -460,7 +467,7 @@ git push -u origin HEAD
 ```bash
 gh pr create \
   --title "{PR title}" \
-  --base main \
+  --base <base-branch> \
   --body "{PR body}"
 ```
 
@@ -566,8 +573,8 @@ When the user confirms merging (or passes `--merge`):
 2. Merge PR, delete branch, and sync local base branch:
    ```bash
    gh pr merge <number> --squash --delete-branch
-   git checkout main
-   git pull origin main
+   git checkout <base-branch>
+   git pull origin <base-branch>
    ```
 3. Verify the linked GitHub Issue `#<issue>` is closed (`gh issue view <issue> --json state`) and transition its GitHub Project status to `Done`:
    ```bash
