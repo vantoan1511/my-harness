@@ -82,6 +82,20 @@ class TestImplementSkill(unittest.TestCase):
                 f"{md_path} Phase 3 must document review and adaptation loop",
             )
 
+    def test_implement_skill_links_and_closes_issues_on_non_default_base(self):
+        for skill_path in [self.project_skill_dir / "SKILL.md", self.template_skill_dir / "SKILL.md"]:
+            content = skill_path.read_text(encoding="utf-8")
+            self.assertIn("gh issue develop", content)
+            self.assertIn("defaultBranchRef", content)
+            self.assertIn("gh issue comment", content)
+            self.assertIn("gh issue close", content)
+
+    def test_agents_md_documents_non_default_base_issue_linking_and_closure(self):
+        for md_path in [self.agents_md, self.template_agents_md]:
+            content = md_path.read_text(encoding="utf-8")
+            self.assertIn("gh issue develop", content)
+            self.assertIn("gh issue close", content)
+
 
 if __name__ == "__main__":
     unittest.main()
