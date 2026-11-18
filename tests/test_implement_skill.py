@@ -55,6 +55,10 @@ class TestImplementSkill(unittest.TestCase):
             self.assertIn("--no-commit", content)
             self.assertIn("spike: true", content)
             self.assertIn("local: true", content)
+            self.assertIn("Auto-Create PR: false", content)
+            self.assertIn("auto_create_pr: false", content)
+            self.assertIn("Branch Name", content)
+            self.assertIn("branch_name", content)
             self.assertIn(
                 "[Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.",
                 content,

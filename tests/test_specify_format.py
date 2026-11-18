@@ -29,5 +29,30 @@ class TestSpecifyHandoffFormat(unittest.TestCase):
             self.assertIn("> **Recommended Next Step (Clean Context & Low Effort)**:", content, f"{path} must contain Recommended Next Step header")
             self.assertIn("```text\n> /implement @.agents/PRPs/plans/{name}.plan.md\n> ```", content, f"{path} must contain copyable code block for /implement")
 
+    def test_specify_asks_about_auto_create_pr_and_target_branch(self):
+        for path in [self.project_skill, self.template_skill]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("git branch --show-current", content)
+            self.assertIn("Branch Name", content)
+            self.assertIn("Auto-Create PR", content)
+            self.assertIn("Seamless Mode", content)
+            self.assertIn("Base Branch", content)
+            self.assertIn("PR Target Branch", content)
+            self.assertIn("Delivery & PR Preferences", content)
+
+    def test_plan_template_has_auto_create_pr_and_base_branch_metadata(self):
+        proj_tpl = self.repo_root / ".agents" / "skills" / "prp-plan" / "resources" / "plan-template.md"
+        tmpl_tpl = self.repo_root / "template" / ".agents" / "skills" / "prp-plan" / "resources" / "plan-template.md"
+        self.assertEqual(
+            proj_tpl.read_text(encoding="utf-8"),
+            tmpl_tpl.read_text(encoding="utf-8"),
+            "Project and template plan-template.md must be byte-for-byte identical",
+        )
+        for tpl in [proj_tpl, tmpl_tpl]:
+            content = tpl.read_text(encoding="utf-8")
+            self.assertIn("- **Branch Name**:", content)
+            self.assertIn("- **Auto-Create PR**:", content)
+            self.assertIn("- **Base Branch**:", content)
+
 if __name__ == "__main__":
     unittest.main()

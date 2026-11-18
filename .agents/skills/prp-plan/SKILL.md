@@ -139,6 +139,8 @@ Read and follow the canonical plan structure in [`resources/plan-template.md`](.
 python -c "import os, subprocess, sys; p = '.agents/scripts/verify_shift_left.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/verify_shift_left.py'); sys.exit(subprocess.call([sys.executable, p, '--changed']) if os.path.exists(p) else 0)"
 ```
 
+Ensure `## Metadata` also records `- **Branch Name**` (working feature/fix branch), `- **Auto-Create PR**` (`true` for Seamless Mode, or `false (local: true)` for Local-Only), and `- **Base Branch**` (PR target branch, asking via `ask_question` if not already known).
+
 ---
 
 ## Output

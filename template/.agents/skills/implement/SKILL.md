@@ -48,14 +48,14 @@ Parse `$ARGUMENTS` for the plan file path and optional execution mode flags (`--
 
 | Flag / Plan Metadata | Mode | Behavior |
 |---|---|---|
-| *(default)* | **Standard PR Mode** | Execute plan, validate, commit locally, push to remote, and create/update a GitHub PR (Phase 7). |
-| `--no-pr`, `--local`, `--spike`, or plan metadata `spike: true` / `local: true` | **Spike / Playground / Local-Only Mode** | Execute plan, validate, and create a clean local commit in Phase 6. **SKIP Phase 7 entirely** (do NOT push to remote origin and do NOT run `gh pr create`). |
+| *(default)* or `Auto-Create PR: true` | **Standard PR Mode** | Execute plan, validate, commit locally, push to remote, and create/update a GitHub PR (Phase 7). |
+| `--no-pr`, `--local`, `--spike`, or plan metadata `Auto-Create PR: false` / `auto_create_pr: false` / `spike: true` / `local: true` | **Spike / Playground / Local-Only Mode** | Execute plan, validate, and create a clean local commit in Phase 6. **SKIP Phase 7 entirely** (do NOT push to remote origin and do NOT run `gh pr create`). |
 | `--no-commit` *(with Spike/Local mode)* | **Uncommitted / Staged Local Mode** | Keep changes uncommitted or staged in Phase 6 without creating a commit, and **SKIP Phase 7 entirely**. |
 
 Read the plan file using your file reading tools (e.g., `read_file` on the plan path from `$ARGUMENTS`):
 
 Extract these sections from the plan:
-- **Metadata / Frontmatter** — Check for `spike: true`, `local: true`, `Base Branch` / `base_branch`, `GitHub Issue` (`#<number>`), and `Parent Epic` (`#<epic>`)
+- **Metadata / Frontmatter** — Check for `Branch Name` / `branch_name`, `Auto-Create PR` (`true`/`false`), `auto_create_pr`, `spike: true`, `local: true`, `Base Branch` / `base_branch`, `GitHub Issue` (`#<number>`), and `Parent Epic` (`#<epic>`)
 - **Summary** — What is being built
 - **Patterns to Mirror** — Code conventions to follow
 - **Files to Change** — What to create or modify
@@ -91,11 +91,16 @@ Resolve `<base-branch>` in priority order:
 4. Closest ancestor remote integration branch (e.g. `origin/feat/*` ahead of `origin/main` that is an ancestor of `HEAD` or has a closer merge-base than `origin/main`)
 5. Default to `main`
 
+Resolve `<target-branch>` (working branch) in priority order:
+1. Plan metadata `Branch Name` / `branch_name` (when specified and not `"N/A"`)
+2. Current branch (if already on a non-protected feature/task branch that is not `<base-branch>`)
+3. Auto-derived `feat/issue-<number>-{plan-name}` (or `feat/{plan-name}` if no issue)
+
 | Current State | Action |
 |---|---|
-| On feature/task branch | Use current branch (and preserve resolved `<base-branch>`) |
-| On `main` / `master` or an integration `feat/*` branch (when `--base` or plan targets it), clean working tree | Create feature branch: `git checkout -b feat/issue-<number>-{plan-name}` (or `feat/{plan-name}` if no issue), and record its base: `git config branch.<new-branch>.base <base-branch>` |
-| On `main` / `master`, dirty working tree | **STOP** — Ask user to stash or commit first |
+| On `<target-branch>` (non-protected feature/task branch ≠ `<base-branch>`) | Use current branch (and preserve resolved `<base-branch>`) |
+| On `main` / `master`, `<base-branch>`, or another branch when plan specifies `<target-branch>`, clean working tree | Checkout or create `<target-branch>` (`git checkout <target-branch>` if it exists, else `git checkout -b <target-branch>` from `<base-branch>`), and record its base: `git config branch.<target-branch>.base <base-branch>` |
+| On `main` / `master` (or switching needed), dirty working tree | **STOP** — Ask user to stash or commit first |
 | In a git worktree for this feature | Use the worktree |
 
 ### Transition Project Status to `In Progress` (if linked to a GitHub Issue)
@@ -312,11 +317,11 @@ Seamlessly stage and commit all implementation code, tests, reports, and archive
 
 ### 0. Check Spike / Local / No-Commit Flags
 
-Check if `$ARGUMENTS` contains `--no-pr`, `--local`, `--spike`, `--no-commit`, or if the plan metadata indicates `spike: true` / `local: true`:
+Check if `$ARGUMENTS` contains `--no-pr`, `--local`, `--spike`, `--no-commit`, or if the plan metadata indicates `Auto-Create PR: false` / `auto_create_pr: false` / `spike: true` / `local: true`:
 - **If `--no-commit` is specified**:
   - Keep changes uncommitted or staged (`git add -A` if requested, without running `git commit`).
   - **SKIP Phase 7 entirely** (do NOT push to remote origin and do NOT run `gh pr create`) and proceed directly to Phase 8.
-- **If `--no-pr`, `--local`, `--spike`, or plan metadata `spike: true` / `local: true` is present**:
+- **If `--no-pr`, `--local`, `--spike`, or plan metadata `Auto-Create PR: false` / `auto_create_pr: false` / `spike: true` / `local: true` is present**:
   - Proceed with steps 1–4 below to create a clean local commit (or offer to keep changes uncommitted/staged if `--no-commit` is specified).
   - After committing locally, **SKIP Phase 7 entirely**: do NOT push to remote origin and do NOT run `gh pr create`.
   - Print a clean summary:
@@ -374,7 +379,7 @@ git rev-parse --short HEAD
 ## Phase 7 — PR
 
 > **Mode Gate (Spike / Local-Only Mode Check)**:
-> Before executing Phase 7, check if `$ARGUMENTS` contains `--no-pr`, `--local`, `--spike`, or if the plan metadata indicates `spike: true` / `local: true`:
+> Before executing Phase 7, check if `$ARGUMENTS` contains `--no-pr`, `--local`, `--spike`, or if the plan metadata indicates `Auto-Create PR: false` / `auto_create_pr: false` / `spike: true` / `local: true`:
 > - **If present (Spike/Local Mode)**:
 >   - **SKIP Phase 7 entirely**: Do NOT push to remote origin (`git push`) and do NOT run `gh pr create`.
 >   - Print a clean summary: `[Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.`
@@ -487,7 +492,7 @@ If `gh` CLI is not installed or unauthenticated:
 
 ## Phase 8 — OUTPUT
 
-If running in **Spike / Local-Only Mode** (`--no-pr`, `--local`, `--spike`, or `spike: true` / `local: true`), include the summary banner:
+If running in **Spike / Local-Only Mode** (`--no-pr`, `--local`, `--spike`, or `Auto-Create PR: false` / `auto_create_pr: false` / `spike: true` / `local: true`), include the summary banner:
 
 ```
 [Spike Completed] Local changes verified and committed locally on branch <branch>. No remote PR was created.
@@ -545,7 +550,7 @@ Report comprehensive results to user:
 
 ## Phase 9 — MERGE, CLOSE ISSUE & FOLLOW-UP TRIAGE
 
-> **Mode Gate (Spike / Local-Only Mode)**: Skip Phase 9 entirely when `--no-pr`, `--local`, `--spike`, `--no-commit`, or `spike: true` / `local: true` is active.
+> **Mode Gate (Spike / Local-Only Mode)**: Skip Phase 9 entirely when `--no-pr`, `--local`, `--spike`, `--no-commit`, or `Auto-Create PR: false` / `auto_create_pr: false` / `spike: true` / `local: true` is active.
 
 ### Step 1: Known Issues & Follow-Up Triage (`Found Known Issues? → Create New Issue`)
 
