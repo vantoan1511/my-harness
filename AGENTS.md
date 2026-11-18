@@ -51,7 +51,7 @@ Execute plans via `/implement <plan-path>` for a seamless implementation-to-PR w
 - Do not refactor unrelated code.
 - Do not add speculative features or abstractions for hypothetical future requirements.
 - **Autonomous Self-Review & Adapt Loop**: Before committing, /implement automatically triggers an isolated Critic Subagent review and adapts high/medium findings via bounded TDD micro-loops.
-- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and (in Seamless Mode `Auto-Create PR: true`) opens a GitHub pull request targeting `Base Branch` (`Closes #N`), or stays local-only when `--no-pr` / `Auto-Create PR: false` (`local: true`) is configured.
+- Upon successful validation and adaptation, /implement automatically writes the implementation report, archives the plan, commits changes, and (in Seamless Mode `Auto-Create PR: true`) opens a GitHub pull request targeting `Base Branch` (`Closes #N`, using `gh issue develop` for new issue branches and posting a `gh issue comment` cross-link when targeting a non-default `feat/*` base branch), or stays local-only when `--no-pr` / `Auto-Create PR: false` (`local: true`) is configured.
 
 ## Phase 4 — Verify
 
@@ -73,7 +73,7 @@ The final response must contain:
 - Files changed
 - Verification performed
 - Remaining issues or limitations
-- GitHub PR merge, issue closure (`Done` status via `gh_project.py set-status`), and triage of any discovered known issues into new GitHub Project tickets (`Found Known Issues? -> Create New Issue`).
+- GitHub PR merge, issue closure (explicitly closing via `gh issue close` when merged into a non-default `feat/*` base branch + `Done` status via `gh_project.py set-status`), and triage of any discovered known issues into new GitHub Project tickets (`Found Known Issues? -> Create New Issue`).
 
 ---
 

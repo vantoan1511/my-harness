@@ -99,7 +99,7 @@ Resolve `<target-branch>` (working branch) in priority order:
 | Current State | Action |
 |---|---|
 | On `<target-branch>` (non-protected feature/task branch ≠ `<base-branch>`) | Use current branch (and preserve resolved `<base-branch>`) |
-| On `main` / `master`, `<base-branch>`, or another branch when plan specifies `<target-branch>`, clean working tree | Checkout or create `<target-branch>` (`git checkout <target-branch>` if it exists, else `git checkout -b <target-branch>` from `<base-branch>`), and record its base: `git config branch.<target-branch>.base <base-branch>` |
+| On `main` / `master`, `<base-branch>`, or another branch when plan specifies `<target-branch>`, clean working tree | Checkout `<target-branch>` if it exists; otherwise, when linked to `GitHub Issue` `#<number>` and `origin/<base-branch>` exists remotely, create & link it via `gh issue develop <number> --base <base-branch> --name <target-branch> --checkout` (falling back to `git checkout -b <target-branch> <base-branch>` if `gh issue develop` fails or offline), and record its base: `git config branch.<target-branch>.base <base-branch>` |
 | On `main` / `master` (or switching needed), dirty working tree | **STOP** — Ask user to stash or commit first |
 | In a git worktree for this feature | Use the worktree |
 
@@ -476,10 +476,18 @@ gh pr create \
   --body "{PR body}"
 ```
 
-Verify PR details (including `closingIssuesReferences` when an issue number was linked):
+Verify PR details (including `closingIssuesReferences` when an issue number was linked) and compare `<base-branch>` against the repository default branch:
 ```bash
+gh repo view --json defaultBranchRef --jq .defaultBranchRef.name
 gh pr view --json number,url,title,state,baseRefName,headRefName,additions,deletions,changedFiles,closingIssuesReferences
 ```
+
+When a `GitHub Issue` `#<issue>` is linked:
+- **If `<base-branch>` equals the default branch** and `closingIssuesReferences` is empty, update the PR body (`gh pr edit <pr-number> --body ...`) so `Closes #<issue>` is present and recognized.
+- **If `<base-branch>` is a non-default branch (e.g., `feat/*`, `develop`, `release/*`)**: GitHub ignores `Closes #<issue>` auto-linking and auto-closing on non-default base branches (`closingIssuesReferences` stays empty). Keep `Closes #<issue>` in the PR body for traceability, and post a cross-reference comment on the issue so PR ↔ Issue stay linked:
+  ```bash
+  gh issue comment <issue> --body "Linked PR #<pr-number> (targeting \`<base-branch>\`): <pr-url>"
+  ```
 
 ### Fallback if GitHub CLI Unavailable
 If `gh` CLI is not installed or unauthenticated:
@@ -581,11 +589,15 @@ When the user confirms merging (or passes `--merge`):
    git checkout <base-branch>
    git pull origin <base-branch>
    ```
-3. Verify the linked GitHub Issue `#<issue>` is closed (`gh issue view <issue> --json state`) and transition its GitHub Project status to `Done`:
+3. Verify the linked GitHub Issue `#<issue>` is closed (`gh issue view <issue> --json state --jq .state`). If the issue is still `OPEN` (for example, because the PR merged into a non-default `feat/*` base branch where GitHub does not auto-close `Closes #<issue>`), explicitly close it referencing the merged PR:
+   ```bash
+   gh issue close <issue> --reason completed --comment "Resolved by merged PR #<pr-number> into \`<base-branch>\`."
+   ```
+4. Transition the closed issue's GitHub Project status to `Done`:
    ```bash
    python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'set-status', '<ISSUE_NUMBER>', 'Done']) if os.path.exists(p) else 0"
    ```
-4. If a `Parent Epic` `#<epic>` is linked, refresh its Roadmap dates:
+5. If a `Parent Epic` `#<epic>` is linked, refresh its Roadmap dates:
    ```bash
    python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'rollup-epic', '<EPIC_NUMBER>']) if os.path.exists(p) else 0"
    ```

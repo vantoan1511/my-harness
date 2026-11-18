@@ -82,6 +82,13 @@ Check for related PRP artifacts:
 
 Reference these in the PR body if they exist.
 
+### Linked GitHub Issue
+
+Extract any associated `GitHub Issue` (`#<number>`) in priority order from:
+1. Linked PRP plan metadata (`- **GitHub Issue**: #<number>`), `.agents/PRPs/reports/`, or `.agents/PRPs/prds/`
+2. Current branch name (e.g., `feat/issue-<number>-...`, `fix/issue-<number>-...`, or `<type>/<number>-...`)
+3. Commit messages in `origin/<base>..HEAD` (`Closes #<N>`, `Fixes #<N>`, `Refs #<N>`)
+
 ---
 
 ## Phase 3 — PUSH
@@ -105,7 +112,7 @@ If rebase conflicts occur, stop and inform the user.
 
 ### With Template
 
-If a PR template was found in Phase 2, fill in each section using the commit and file analysis. Preserve all template sections — leave sections as "N/A" if not applicable rather than removing them.
+If a PR template was found in Phase 2, fill in each section using the commit and file analysis. Preserve all template sections — leave sections as "N/A" if not applicable rather than removing them. When a `GitHub Issue` (`#<issue>`) was discovered, include `Closes #<issue>` in the related issues section.
 
 ### Without Template
 
@@ -130,7 +137,7 @@ Use this default format:
 
 ## Related Issues
 
-<linked issues with Closes/Fixes/Relates to #N, or "None">
+<If a GitHub Issue was discovered: "Closes #<issue>", otherwise "None">
 ```
 
 ### Create the PR
@@ -148,9 +155,17 @@ gh pr create \
 ## Phase 5 — VERIFY
 
 ```bash
-gh pr view --json number,url,title,state,baseRefName,headRefName,additions,deletions,changedFiles
+gh repo view --json defaultBranchRef --jq .defaultBranchRef.name
+gh pr view --json number,url,title,state,baseRefName,headRefName,additions,deletions,changedFiles,closingIssuesReferences
 gh pr checks --json name,state,bucket 2>$null || true
 ```
+
+When a `GitHub Issue` (`#<issue>`) was linked:
+- **If `<base>` equals the repository default branch** and `closingIssuesReferences` is empty, update the PR body (`gh pr edit <number> --body ...`) so `Closes #<issue>` is recognized.
+- **If `<base>` is a non-default branch (e.g., `feat/*`, `develop`, `release/*`)**: GitHub ignores `Closes #<issue>` auto-linking and auto-closing on non-default base branches (`closingIssuesReferences` stays empty). Keep `Closes #<issue>` in the PR body for traceability, and post a cross-reference comment on the issue:
+  ```bash
+  gh issue comment <issue> --body "Linked PR #<pr-number> (targeting \`<base>\`): <pr-url>"
+  ```
 
 ---
 
@@ -189,7 +204,11 @@ When the user requests merging or closing out the PR lifecycle:
    git pull origin <base>
    ```
 2. **Close Linked Issue & Update Project Board Status (`Done`)**:
-   - Confirm linked `Closes #<issue>` tickets are closed (`gh issue view <issue> --json state`).
+   - Confirm linked `Closes #<issue>` tickets are closed (`gh issue view <issue> --json state --jq .state`).
+   - If a linked issue is still `OPEN` (for example, because the PR merged into a non-default `feat/*` base branch where GitHub does not auto-close `Closes #<issue>`), explicitly close it referencing the merged PR:
+     ```bash
+     gh issue close <issue> --reason completed --comment "Resolved by merged PR #<pr-number> into \`<base>\`."
+     ```
    - Transition each closed issue to `Done` and roll up any Parent Epic Roadmap dates:
      ```bash
      python -c "import os, subprocess, sys; p = '.agents/scripts/gh_project.py'; p = p if os.path.exists(p) else os.path.expanduser('~/.gemini/config/plugins/my-harness/scripts/gh_project.py'); subprocess.call([sys.executable, p, 'set-status', '<ISSUE_NUMBER>', 'Done']) if os.path.exists(p) else 0"
