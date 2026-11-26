@@ -95,16 +95,18 @@ Identify:
   - Inspect existing handlers, endpoints, or data models.
   - Inspect reactive stores, state containers, and domain services.
 
-### 2. Identify Technical & Architectural Boundaries
-- Can existing APIs handle this, or are new endpoints/handlers needed?
-- What state needs to be stored? (Session state, local cache, database, persistent config).
-- What existing modules can be reused or extended?
+### 2. Identify Technical, Architectural & Blast-Radius Boundaries
+- **Challenge Necessity & Reuse/Delete First**: Can this be solved by configuration, extending an existing module, or simplifying/deleting legacy code instead of adding a new layer?
+- **Blast Radius**: Trace existing callers, downstream consumers, and backward-compatibility constraints (schema migrations, API contracts, persisted state).
+- **Exemplars**: Pick 1–2 exemplary files in the same domain/layer to mirror for naming, error handling, and structure.
+- **State & APIs**: Can existing APIs handle this, or are new endpoints/handlers needed? What state needs to be stored (session, cache, DB, config)?
 
-### 3. Extract Unknowns & Decision Forks
-List specific ambiguities that cannot be answered by the code alone:
-- **Scope boundaries**: What is in v1 vs out of scope?
-- **Placement & UX**: Where should the control/view live?
-- **Behavioral choices**: Confirmation dialog vs instant feedback? Polling vs websocket stream?
+### 3. Extract Unknowns, Trade-offs & Failure Modes
+List specific ambiguities and resilience questions that cannot be answered by the code alone:
+- **Scope & Non-Goals**: What is strictly in v1 vs. explicitly NOT being built?
+- **Trade-offs**: Are there 2 viable approaches (e.g., simple & reversible vs. extensible)? Which trade-off fits best?
+- **Failure Modes & Reversibility**: What happens on timeout/network failure, double-submit (idempotency), concurrent writes (race conditions), or partial failure? How do we roll back safely (feature flag / reversible migration)?
+- **Placement & UX**: Where should the control/view live? Confirmation dialog vs. instant feedback?
 
 ---
 
@@ -276,11 +278,17 @@ export interface ActionResponse {
 - **In Scope (v1)**:
   - [Explicit item 1]
   - [Explicit item 2]
-- **Out of Scope**:
+- **Out of Scope (Non-Goals)**:
   - [Explicit item 1 to avoid scope creep]
   - [Explicit item 2]
 
-## 5. Acceptance Criteria
+## 5. Design Trade-offs, Failure Modes & Slicing
+- **Blast Radius & Reuse/Delete**: [Callers affected, backward-compatibility constraints, existing utilities reused or legacy code removed]
+- **Chosen Trade-off**: [Option chosen vs. alternative rejected, favoring simplicity and reversibility]
+- **Failure Modes & Rollback**: [Timeout/network error, double-submit/idempotency, race condition, partial failure, and safe rollback/feature-flag strategy]
+- **PR Slicing**: [Single PR, or vertical slices if > ~400 LOC / multi-layer: Slice 1 Prep/Refactor → Slice 2 Core + Tests → Slice 3 Wiring]
+
+## 6. Acceptance Criteria
 - [ ] AC-1: [Specific testable condition]
 - [ ] AC-2: [Specific testable condition]
 - [ ] AC-3: Zero architectural violations (verify_shift_left.py passes)
@@ -303,7 +311,7 @@ The plan must:
    - `- **Branch Name**: <branch-name>` (e.g., `feat/issue-<number>-{kebab-name}` or `feat/{kebab-name}`)
    - `- **Auto-Create PR**: true` (Seamless Mode) or `- **Auto-Create PR**: false (local: true)` (Local-Only Mode; append `--no-commit` note if uncommitted mode was chosen)
    - `- **Base Branch**: <target-branch>` (e.g., `main` or `feat/<integration-branch>`)
-3. Embed the contracts defined in Phase 3 (or resolved from the GitHub Issue).
+3. Embed the contracts, **Senior Design & Resilience Gate** (blast radius, chosen trade-off, failure modes & rollback, PR slicing), and exemplar files defined in Phase 1–3 so `/implement` executes cleanly without needing extra planning skills.
 4. Define **Step-by-Step Tasks** where each task contains:
    - `ACTION`: concrete edit description
    - `TEST_FIRST`: specific test file path, test name, input fixture, expected assertion
