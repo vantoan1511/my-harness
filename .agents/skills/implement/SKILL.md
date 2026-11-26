@@ -237,18 +237,18 @@ Invoke a read-only Critic Subagent via `invoke_subagent` to evaluate the uncommi
 - **Subagent Prompt Content**:
   1. Provide the Plan Summary and Acceptance Criteria from Phase 1.
   2. Provide the diff (`git diff HEAD`) and paths/contents of untracked files.
-  3. Rubric based on the Shift-Left Quality & Architecture Constitution and Simplifier:
+  3. Rubric based on the Shift-Left Quality & Architecture Constitution, Simplifier, and `anti-slop` skill:
      - **Security**: Zero secrets, safe error handling, input validation, safe execution paths.
      - **Architecture & Boundaries**: Layer encapsulation, correct dependency direction, zero banned imports.
      - **Reuse & Anti-WET**: Reusing existing utilities, no duplicate logic or models.
      - **Code Smells**: Deep nesting (>3 levels), large functions (>50 lines), magic constants, dead code, stray debug logs.
-     - **Simplifier Targets**: Clarity over cleverness, early returns, removing unneeded single-use abstractions.
+     - **Simplifier & Anti-Slop Targets**: Clarity over cleverness, early returns, removing additive band-aids, defensive bloat inside trust boundaries, silent error swallowing, speculative single-use abstractions, narrator comments, type-system escapes, and foreign idioms.
   4. Response Schema:
      ```markdown
      ### Review Findings
      - **Decision**: APPROVE | ADAPT_REQUIRED | ESCALATE
      - **Findings**:
-       - `[CRITICAL|HIGH|MEDIUM|LOW]` `path/to/file:line` — **Category**: [Security | Architecture | Reuse/DRY | Code Smell | Simplifier]
+       - `[CRITICAL|HIGH|MEDIUM|LOW]` `path/to/file:line` — **Category**: [Security | Architecture | Reuse/DRY | Code Smell | Simplifier | Anti-Slop]
          - **Issue**: [Concise description]
          - **Adaptation**: [Concrete minimal fix required]
      ```
