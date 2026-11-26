@@ -55,11 +55,12 @@ Determine input type from `$ARGUMENTS`:
 
 ## Phase 1 — PARSE
 
-Extract and clarify the feature requirements:
+Extract, challenge, and clarify the feature requirements:
 - **What** is being built (concrete deliverable)
-- **Why** it matters (user value)
+- **Why** it matters (user value) — and challenge whether config, reuse, or simplifying existing code solves it without adding new complexity
 - **Who** uses it (target user/system)
 - **Where** it fits (which part of the codebase)
+- **Non-Goals** (explicitly what is NOT being built in this iteration)
 
 ### User Story Format:
 ```
@@ -82,6 +83,7 @@ Gather deep codebase intelligence. Search the codebase directly across 8 categor
 6. **Test Patterns** — Where tests live, naming conventions, assertion styles.
 7. **Configuration** — Config files, environment variables, feature flags.
 8. **Dependencies** — Libraries, internal modules, and utilities used.
+9. **Blast Radius & Callers** — Existing callers, backward-compatibility constraints, and dead/legacy code that can be simplified or deleted instead of patched around.
 
 ### Codebase Analysis (5 Traces):
 1. **Entry Points** — How requests/events enter the system.
@@ -118,10 +120,12 @@ Document before and after states:
 - **NOT Building**: Explicit list of what is OUT OF SCOPE.
 
 ### Shift-Left Contract-First Design
-Before defining tasks, define data contracts:
-1. **API / Boundary Contracts**: Define exact request/response schemas or types.
-2. **State & Storage Invariants**: Document state keys, stores, or default fallbacks.
+Before defining tasks, define data contracts and resilience guarantees:
+1. **API / Boundary Contracts**: Define exact request/response schemas or types and trust boundaries.
+2. **State & Storage Invariants**: Document state keys, stores, invariants that must never break, and default fallbacks.
 3. **Component & Layout Contracts**: Document shared component usage and design tokens.
+4. **Failure Modes & Rollback**: Explicitly design for timeouts/network errors, double-submit (idempotency), race conditions, partial failures, and safe rollback (feature flag or reversible change).
+5. **PR Slicing**: Keep changes small and reviewable. If estimated scope exceeds ~8 files or ~500 LOC, propose vertical slices (e.g., Prep/Refactor → Core + Tests → Wiring) instead of one monolithic PR.
 
 ---
 

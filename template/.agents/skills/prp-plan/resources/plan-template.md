@@ -49,6 +49,21 @@ Follow existing codebase patterns:
 
 ---
 
+## Senior Design & Resilience Gate
+
+- **Blast Radius & Callers**: [Existing callers, backward-compatibility constraints, and legacy code reused or deleted]
+- **Chosen Trade-off**: [Selected approach vs. rejected alternative — favoring simplicity and reversibility]
+- **PR Slicing**: [Single PR | Slice 1 (Prep) → Slice 2 (Core + Tests) → Slice 3 (Wiring)]
+
+### Failure Modes & Rollback
+| Failure Mode | Expected Behavior | Rollback / Mitigation |
+|---|---|---|
+| Timeout / Network Error | ... | ... |
+| Duplicate Submit / Race | ... | ... |
+| Partial Failure / Bad Deploy | ... | ... |
+
+---
+
 ## Files to Change
 
 | File | Action | Justification |
