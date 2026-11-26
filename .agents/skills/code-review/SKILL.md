@@ -80,6 +80,13 @@ Evaluate against the **Shift-Left Quality Review Constitution**:
 - Naming conventions, error structures, state management, idiomatic formatting.
 - Semantic constants over ad-hoc literals.
 
+#### 6. AI Slop Audit (`anti-slop` Rubric) (HIGH / MEDIUM)
+- Additive band-aids (bolting special-case flags/branches onto flawed flow instead of fixing root structure).
+- Defensive bloat inside typed trust boundaries (redundant null/type guards or silent fallbacks for compiler-guaranteed invariants).
+- Speculative single-use abstractions (helpers, wrappers, factories with only 1 caller and no real boundary).
+- Narrator comments restating obvious code, type-system escapes (`any`, unsafe casts, lint suppressions), or foreign idioms clashing with repo exemplars.
+- If slop findings exist in local mode, recommend or invoke `/anti-slop` to rewrite cleanly.
+
 ### Phase 3 — REPORT & GATES
 
 Generate structured report:
@@ -144,6 +151,7 @@ Use non-destructive inspection techniques:
 | **Security** | Secrets, injections, path traversals, authn/authz gaps |
 | **Performance** | N+1 queries, unbounded iterations, memory leaks, I/O blocking |
 | **Maintainability** | Magic literals, deep nesting, missing tests, unhandled errors |
+| **AI Slop (`anti-slop`)** | Additive band-aids, defensive bloat inside trust boundaries, speculative single-use abstractions, silent error swallowing, narrator comments |
 
 Severities:
 - **CRITICAL**: Immediate security or data loss hazard. (Blocker)

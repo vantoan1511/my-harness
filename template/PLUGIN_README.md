@@ -35,9 +35,9 @@ Whether working in TypeScript, Python, Rust, or Go, this plugin turns general AI
 - Strict Red-Green-Refactor loop.
 - Prohibits writing production code before reproducing failures in automated tests.
 
-### 5. Shift-Left Code Review (`/code-review`)
-- Evaluates uncommitted changes or GitHub pull requests against the shift-left quality constitution.
-- Flags layer violations, duplicate logic, leaky abstractions, and missing tests.
+### 5. Shift-Left Code Review (`/code-review`) & Anti-Slop Craft (`/anti-slop`)
+- **`/code-review`**: Evaluates uncommitted changes or GitHub pull requests against the shift-left quality constitution, flagging layer violations, duplicate logic, leaky abstractions, and missing tests.
+- **`/anti-slop`**: Enforces senior-level code craft with exemplar mirroring, upfront invariant locking, strict negative constraints (no additive band-aids, defensive bloat, or speculative abstractions), and a bounded self-audit & auto-rewrite loop.
 
 ### 6. Git, GitHub Projects & Delivery Workflows
 - **`/github-project-setup`**: Creates and links a GitHub Project (v2) with 2-week sprints, Roadmap dates, Priority, Board/Table/Roadmap views, and caches metadata via `gh_project.py sync`.
